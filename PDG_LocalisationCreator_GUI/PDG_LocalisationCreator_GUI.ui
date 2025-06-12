@@ -13,6 +13,16 @@
   <property name="windowTitle">
    <string>PDG Localisation Tool</string>
   </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>E:/OneDrive/Desktop/PDGIco.png</normaloff>E:/OneDrive/Desktop/PDGIco.png</iconset>
+  </property>
+  <property name="iconSize">
+   <size>
+    <width>32</width>
+    <height>32</height>
+   </size>
+  </property>
   <widget class="QWidget" name="centralWidget">
    <layout class="QVBoxLayout" name="verticalLayout_2">
     <item>
