@@ -69,22 +69,37 @@ void PDG_LocalisationCreator_GUI::on_unifiedRunButton_clicked()
 
     if (modType > 0) {
         setUiEnabled(false);
+        statusLabel->setText("Starting process...");
         ui->progressBar->setValue(0);
-        isCleanupStep = false; // Reset flag for the start of the sequence
 
-        // Setup log file for this run
-        QDir logDir("logs");
-        if (!logDir.exists()) {
-            logDir.mkpath("."); // Create "logs" directory if it doesn't exist
+        // Setup logging for this run
+        QDateTime currentDateTime = QDateTime::currentDateTime();
+        currentLogFileName = "logs/log_" + currentDateTime.toString("yyyy-MM-dd_hh-mm-ss") + ".txt";
+
+        // Ensure log directory exists
+        QDir logsDir("logs");
+        if (!logsDir.exists()) {
+            logsDir.mkpath("."); // Create "logs" directory
         }
-        currentLogFileName = "logs/log_" + QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss") + ".txt";
-        QFile* logFile = new QFile(currentLogFileName);
-        if (!logFile->open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Append)) {
-            QMessageBox::critical(this, "Error", "Failed to open log file for writing: " + currentLogFileName);
+
+        QFile* logFile = new QFile(currentLogFileName); // Dynamically allocated
+        if (logFile->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+            logFileStream.reset(new QTextStream(logFile)); // QScopedPointer now owns logFile
+            logFileStream->setEncoding(QStringConverter::Utf8);
+            *logFileStream << "--- Log Session Started: " << currentDateTime.toString(Qt::ISODate) << " ---\n";
+            logFileStream->flush();
+            logFileStream->device()->setTextModeEnabled(true);
+        }
+        else {
             setUiEnabled(true);
-            delete logFile;
-            return;
+            statusLabel->setText("Error: Could not open log file.");
+            QMessageBox::critical(this, "Log File Error", "Could not open log file for writing to: " + currentLogFileName);
+            return; // Exit early if log file can't be opened
         }
+
+        // Add a guaranteed log message here to check if logFileStream is working
+        writeToLogFile("DEBUG GUI: Log file stream initialized and ready.");
+
         logFileStream.reset(new QTextStream(logFile));
         logFileStream->setEncoding(QStringConverter::Utf8);
         logFileStream->setGenerateByteOrderMark(false);
@@ -131,18 +146,21 @@ void PDG_LocalisationCreator_GUI::handleTaskFinished(bool success, const QString
             else if (ui->swfrRadioButton->isChecked()) modType = 2;
             else if (ui->sgpRadioButton->isChecked()) modType = 3;
 
-            isCleanupStep = true; // Set flag for cleanup task
+            isCleanupStep = true;
             statusLabel->setText("Creation complete. Starting cleanup.");
-            ui->progressBar->setValue(0); // Reset progress bar for cleanup
-            // Start the cleanup task in the worker thread
+            ui->progressBar->setValue(0);
+
+            // DEBUG LOG HERE (already asked for this in previous turn)
+            writeToLogFile("DEBUG GUI: Signalling doCleanupTask to worker.");
+
             QMetaObject::invokeMethod(worker, "doCleanupTask", Qt::QueuedConnection, Q_ARG(int, modType));
         }
-        else {
-            setUiEnabled(true); // Re-enable UI if creation failed
-            ui->progressBar->setValue(0); // Reset progress bar on failure
+        else { // If creation failed
+            setUiEnabled(true);
+            ui->progressBar->setValue(0);
             statusLabel->setText("Task failed.");
             QMessageBox::critical(this, "Error", message + "\nCreation failed. Check the log file for details: " + currentLogFileName);
-            isCleanupStep = false; // Reset for next run
+            isCleanupStep = false;
         }
     }
     else { // If the cleanup task just finished
@@ -169,9 +187,20 @@ void PDG_LocalisationCreator_GUI::handleStatusMessage(const QString& message)
 // Slot: Writes a message to the log file with a timestamp
 void PDG_LocalisationCreator_GUI::writeToLogFile(const QString& message)
 {
-    if (logFileStream) {
-        *logFileStream << "[" << QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss") << "] " << message << "\n";
+    // Try to write using QTextStream as before
+    if (logFileStream && logFileStream->device()->isOpen()) {
+        *logFileStream << "[" << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "] " << message << "\n";
         logFileStream->flush();
+    }
+    // If QTextStream is not valid or not open, try to open the file directly and append
+    else {
+        QFile fallbackLogFile(currentLogFileName);
+        if (fallbackLogFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+            QTextStream out(&fallbackLogFile);
+            out << "[" << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "] FALLBACK_LOG: " << message << "\n";
+            out.flush();
+            fallbackLogFile.close(); // Close the file immediately after writing
+        }
     }
 }
 
