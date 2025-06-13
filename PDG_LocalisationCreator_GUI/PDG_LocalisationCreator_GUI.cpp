@@ -1,45 +1,38 @@
-// ---------------------------------------------------------------- //
-//                  PDG_LocalisationCreator_GUI.cpp (Source File)                    //
-// ---------------------------------------------------------------- //
-// This is the implementation of the MainWindow class. It sets up   //
-// the UI, creates the worker thread, and defines what happens when //
-// buttons are clicked or when the worker sends signals.            //
-// ---------------------------------------------------------------- //
 #include "PDG_LocalisationCreator_GUI.h"
 #include <QRadioButton>
 #include <QMessageBox>
 #include <QLabel>
 #include <QDateTime>
 #include <QDir>
-#include <QRegularExpression> // NEW: For parsing log file names
-#include <QFileInfo> // NEW: For file information
-#include <QDebug> // NEW: For internal cleanup logging
+#include <QRegularExpression> 
+#include <QFileInfo> 
+#include <QDebug> 
 
+// Constructor: Initializes the main window, sets up UI, worker thread, and connects signals/slots.
 PDG_LocalisationCreator_GUI::PDG_LocalisationCreator_GUI(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::PDG_LocalisationCreator_GUIClass())
 {
     ui->setupUi(this);
 
-    // NEW: Run log cleanup when the program starts
-    cleanOldLogs();
+    cleanOldLogs(); // Remove old log files at startup
 
-    // Initialize the new flag
+    // Initialize the cleanup step flag
     isCleanupStep = false;
 
-    // Set up the worker object and move it to a separate thread.
+    // Set up the worker object and move it to a separate thread
     worker = new Worker();
     worker->moveToThread(&workerThread);
 
-    // Initialize and add status label to layout
+    // Create and add the status label to the layout
     statusLabel = new QLabel("Ready", this);
     ui->verticalLayout_2->insertWidget(2, ui->progressBar);
     ui->verticalLayout_2->insertWidget(3, statusLabel);
 
-    // progressBar properties are now set in the .ui file, but good to ensure
+    // Ensure progress bar text is visible
     ui->progressBar->setTextVisible(true);
 
-    // Connect signals from the worker thread to slots in this (main) thread.
+    // Connect signals from the worker thread to slots in this (main) thread
     connect(&workerThread, &QThread::finished, worker, &QObject::deleteLater);
     connect(this, &PDG_LocalisationCreator_GUI::destroyed, this, [=]() {
         workerThread.quit();
@@ -52,12 +45,13 @@ PDG_LocalisationCreator_GUI::PDG_LocalisationCreator_GUI(QWidget* parent)
     // Connect worker's logMessage to the file writer slot
     connect(worker, &Worker::logMessage, this, &PDG_LocalisationCreator_GUI::writeToLogFile);
 
-    workerThread.start();
+    workerThread.start(); // Start the worker thread
 }
 
+// Destructor: Ensures log file is closed and cleans up UI
 PDG_LocalisationCreator_GUI::~PDG_LocalisationCreator_GUI()
 {
-    // If a log file stream is open, ensure it's closed.
+    // If a log file stream is open, ensure it's closed
     if (logFileStream) {
         logFileStream->flush();
         logFileStream.reset(); // Closes the file
@@ -65,6 +59,7 @@ PDG_LocalisationCreator_GUI::~PDG_LocalisationCreator_GUI()
     delete ui;
 }
 
+// Slot: Handles the unified run button click, sets up log file, disables UI, and starts creation task
 void PDG_LocalisationCreator_GUI::on_unifiedRunButton_clicked()
 {
     int modType = 0;
@@ -94,25 +89,29 @@ void PDG_LocalisationCreator_GUI::on_unifiedRunButton_clicked()
         logFileStream->setEncoding(QStringConverter::Utf8);
         logFileStream->setGenerateByteOrderMark(false);
 
-        writeToLogFile("--- STARTING NEW LOCALISATION PROCESS ---");
+        // Write initial log entries
+        writeToLogFile("STARTING NEW LOCALISATION PROCESS");
         writeToLogFile("Log file: " + currentLogFileName);
         writeToLogFile("Selected Mod Type: " + QString::number(modType));
         writeToLogFile("Timestamp: " + QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
 
-        statusLabel->setText("Starting creation task...");
+        statusLabel->setText("Starting creation task");
+        // Start the creation task in the worker thread
         QMetaObject::invokeMethod(worker, "doCreateTask", Qt::QueuedConnection, Q_ARG(int, modType));
     }
 }
 
+// Slot: Updates the progress bar value
 void PDG_LocalisationCreator_GUI::handleProgressUpdate(int value)
 {
     ui->progressBar->setValue(value);
 }
 
+// Slot: Handles task completion, manages log, UI state, and triggers cleanup if needed
 void PDG_LocalisationCreator_GUI::handleTaskFinished(bool success, const QString& message)
 {
     // Log final status before closing stream
-    writeToLogFile("--- Task Sequence Finished ---");
+    writeToLogFile("Task Sequence Finished");
     writeToLogFile("Success: " + QString(success ? "True" : "False"));
     writeToLogFile("Final Message: " + message);
     if (!success) {
@@ -133,8 +132,9 @@ void PDG_LocalisationCreator_GUI::handleTaskFinished(bool success, const QString
             else if (ui->sgpRadioButton->isChecked()) modType = 3;
 
             isCleanupStep = true; // Set flag for cleanup task
-            statusLabel->setText("Creation complete. Starting cleanup...");
+            statusLabel->setText("Creation complete. Starting cleanup.");
             ui->progressBar->setValue(0); // Reset progress bar for cleanup
+            // Start the cleanup task in the worker thread
             QMetaObject::invokeMethod(worker, "doCleanupTask", Qt::QueuedConnection, Q_ARG(int, modType));
         }
         else {
@@ -160,11 +160,13 @@ void PDG_LocalisationCreator_GUI::handleTaskFinished(bool success, const QString
     }
 }
 
+// Slot: Updates the status label with a message from the worker
 void PDG_LocalisationCreator_GUI::handleStatusMessage(const QString& message)
 {
     statusLabel->setText(message);
 }
 
+// Slot: Writes a message to the log file with a timestamp
 void PDG_LocalisationCreator_GUI::writeToLogFile(const QString& message)
 {
     if (logFileStream) {
@@ -173,13 +175,14 @@ void PDG_LocalisationCreator_GUI::writeToLogFile(const QString& message)
     }
 }
 
+// Enables or disables UI controls for mod selection and actions
 void PDG_LocalisationCreator_GUI::setUiEnabled(bool enabled)
 {
     ui->modSelectionBox->setEnabled(enabled);
     ui->actionBox->setEnabled(enabled);
 }
 
-// NEW: Implementation for cleaning old log files
+// Removes old log files from the logs directory, keeping only today's logs
 void PDG_LocalisationCreator_GUI::cleanOldLogs()
 {
     QDir logsDir("logs");

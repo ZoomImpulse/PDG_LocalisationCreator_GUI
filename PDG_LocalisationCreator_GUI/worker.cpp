@@ -1,11 +1,3 @@
-// ---------------------------------------------------------------- //
-//                         worker.cpp (Source File)                 //
-// ---------------------------------------------------------------- //
-// This is the implementation of the Worker class. The logic from   //
-// your Create.cpp and Cleanup.cpp files has been moved here and    //
-// adapted to use Qt classes (QFile, QDir, etc.) and to emit        //
-// signals for UI updates instead of writing to the console.        //
-// ---------------------------------------------------------------- //
 #include "worker.h"
 #include <QFile>
 #include <QDir>
@@ -17,39 +9,44 @@
 #include <unordered_set>
 #include <string>
 #include <vector>
+#include <regex>
 
+// Constructor for Worker class
 Worker::Worker(QObject* parent) : QObject(parent) {}
 
+// Slot to start the creation process for a given mod type
 void Worker::doCreateTask(int modType)
 {
     runCreateProcess(modType);
 }
 
+// Slot to start the cleanup process for a given mod type
 void Worker::doCleanupTask(int modType)
 {
     runCleanupProcess(modType);
 }
 
-// --- Logic from Create.cpp ---
+// Main logic for creating localisation files based on modType
 void Worker::runCreateProcess(int modType)
 {
     emit progressUpdated(0);
-    emit statusMessage("Starting localisation creation"); // User-friendly status
+    emit statusMessage("Starting localisation creation"); 
 
+    // Clear Output folder before starting
     emit logMessage("Clearing contents of Output folder");
     emit statusMessage("Clearing previous output");
     QDir outputDir("Output");
 
-    // Ensure the Output directory exists first
+    // Create Output directory if it doesn't exist
     if (!outputDir.exists()) {
         if (!QDir::current().mkpath("Output")) {
             emit logMessage("ERROR: Could not create Output folder!");
             emit taskFinished(false, "Failed to prepare output directory.");
-            return; // Critical error, stop here
+            return;
         }
     }
 
-    // Remove contents of the Output directory
+    // Remove all files and subdirectories in Output
     QStringList entries = outputDir.entryList(QDir::AllEntries | QDir::NoDotAndDotDot);
     for (const QString& entry : entries) {
         QString fullPath = outputDir.filePath(entry);
@@ -75,6 +72,7 @@ void Worker::runCreateProcess(int modType)
     }
     emit logMessage("Output folder contents cleared.");
 
+    // Prepare file name mappings for each mod type
     std::vector<std::pair<QString, QString>> filenames;
     QDir::current().mkpath("Input");
     QDir::current().mkpath("Output");
@@ -114,9 +112,12 @@ void Worker::runCreateProcess(int modType)
 
     emit statusMessage("Processing " + modName + " localisation files");
 
-    QRegularExpression translationExp("\"[^(]+\\(([^)]+)\\)\" *: *\"(.*?)(?:\\\\\"|$)\""); // Changed regex
+    // Regex for extracting translation entries and escaping
+    std::regex translationExp("\"[^(]+\\(([^)]+)\\)\" *: *\"( *[^:]+: *[^]*)\"");
+    std::regex escapeExp("\\\\([^])"); 
 
     bool success = true;
+    // Process each input file and generate output files for each language
     for (const auto& filePair : filenames) {
         QString inputPath = "Input/" + filePair.first;
         emit logMessage("\n-> Processing: " + inputPath);
@@ -127,21 +128,20 @@ void Worker::runCreateProcess(int modType)
         if (!inputFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
             emit logMessage("ERROR: Could not open file: " + inputPath);
             emit taskFinished(false, "Failed to open input file: " + filePair.first);
-            return; // Exit on first critical error
+            return;
         }
 
         qint64 size = inputFile.size();
         std::unordered_map<std::string, std::vector<std::string>> translations;
+        std::smatch matches;
 
         QTextStream in(&inputFile);
         while (!in.atEnd()) {
-            QString line = in.readLine();
-            QRegularExpressionMatch match = translationExp.match(line);
-            if (match.hasMatch()) {
-                std::string lang = match.captured(1).toStdString();
-                QString rawText = match.captured(2); // Get the captured text as QString
-                // Replace escaped quotes with literal quotes, then append the final missing double quote
-                std::string text = rawText.replace(QStringLiteral("\\\""), QStringLiteral("\"")).toStdString() + "\"";
+            QString line = in.readLine();     
+            std::string stdLine = line.toStdString();  
+            if (std::regex_search(stdLine, matches, translationExp)) { 
+                std::string lang = matches[1].str();
+                std::string text = std::regex_replace(matches[2].str(), escapeExp, "$1");
                 translations[lang].push_back(text);
             }
             if (size > 0) {
@@ -151,6 +151,7 @@ void Worker::runCreateProcess(int modType)
         inputFile.close();
         emit logMessage("Loaded translations from JSON.");
 
+        // Write output files for each language, skipping Italian
         for (const auto& entry : translations) {
             QString language = QString::fromStdString(entry.first);
             if (language.toLower() == "italian") {
@@ -167,7 +168,7 @@ void Worker::runCreateProcess(int modType)
             QFile outputFile("Output/" + langLower + "/" + outFileName);
             if (!outputFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 emit logMessage("ERROR: Could not write to file " + outFileName);
-                success = false; // Mark failure but try to continue
+                success = false;
                 continue;
             }
 
@@ -183,6 +184,7 @@ void Worker::runCreateProcess(int modType)
             outputFile.close();
         }
     }
+    // Emit final result
     if (success) {
         emit taskFinished(true, "Localisation files created successfully!");
     }
@@ -191,143 +193,199 @@ void Worker::runCreateProcess(int modType)
     }
 }
 
-// --- Logic from Cleanup.cpp ---
+// Main logic for cleaning up and updating localisation files based on modType
 void Worker::runCleanupProcess(int modType)
 {
-    using namespace std;
     emit progressUpdated(0);
-    emit logMessage("Starting Cleanup Process"); // Detailed log
-    emit statusMessage("Starting localisation cleanup"); // User-friendly status
+    emit statusMessage("Starting localization cleanup and update");
+    emit logMessage("Running cleanup process...");
 
-    vector<QString> languages = {
-        "braz_por", "english", "french", "german", "polish", "russian", "spanish"
+    // List of supported languages (Italian is skipped)
+    std::vector<QString> languages = {
+        "braz_por", "english", "french", "german", "polish", "russian",
+        // "italian",
+        "spanish"
     };
 
-    vector<QString> modFilesTemplates;
-    if (modType == 1) modFilesTemplates = { "STH_main_l_<lang>.yml", "STH_ships_l_<lang>.yml", "STH_modifiers_l_<lang>.yml", "STH_tech_l_<lang>.yml", "STH_events_l_<lang>.yml" };
-    else if (modType == 2) modFilesTemplates = { "SWFR_main_l_<lang>.yml", "SWFR_ships_l_<lang>.yml", "SWFR_modifiers_l_<lang>.yml", "SWFR_tech_l_<lang>.yml", "SWFR_events_l_<lang>.yml" };
-    else if (modType == 3) modFilesTemplates = { "SGP_main_l_<lang>.yml" };
+    // Define the file templates based on modType
+    QMap<QString, QStringList> modFilesTemplates;
+    QString modName;
+    if (modType == 1) {
+        modName = "STNH";
+        emit logMessage("Selected STNH Cleanup");
+        modFilesTemplates["Output/<lang>/STH_main_l_<lang>.yml"] << "VanillaFiles/<lang>/vanilla_main_l_<lang>.yml";
+        modFilesTemplates["Output/<lang>/STH_ships_l_<lang>.yml"] << "VanillaFiles/<lang>/vanilla_ships_l_<lang>.yml";
+        modFilesTemplates["Output/<lang>/STH_modifiers_l_<lang>.yml"] << "VanillaFiles/<lang>/vanilla_modifiers_l_<lang>.yml";
+        modFilesTemplates["Output/<lang>/STH_tech_l_<lang>.yml"] << "VanillaFiles/<lang>/vanilla_tech_l_<lang>.yml";
+        modFilesTemplates["Output/<lang>/STH_events_l_<lang>.yml"] << "VanillaFiles/<lang>/vanilla_events_l_<lang>.yml";
+    }
+    else if (modType == 2) {
+        modName = "SWFR";
+        emit logMessage("Selected SWFR Cleanup");
+        modFilesTemplates["Output/<lang>/SWFR_main_l_<lang>.yml"] << "VanillaFiles/<lang>/vanilla_main_l_<lang>.yml";
+        modFilesTemplates["Output/<lang>/SWFR_ships_l_<lang>.yml"] << "VanillaFiles/<lang>/vanilla_ships_l_<lang>.yml";
+        modFilesTemplates["Output/<lang>/SWFR_modifiers_l_<lang>.yml"] << "VanillaFiles/<lang>/vanilla_modifiers_l_<lang>.yml";
+        modFilesTemplates["Output/<lang>/SWFR_tech_l_<lang>.yml"] << "VanillaFiles/<lang>/vanilla_tech_l_<lang>.yml";
+        modFilesTemplates["Output/<lang>/SWFR_events_l_<lang>.yml"] << "VanillaFiles/<lang>/vanilla_events_l_<lang>.yml";
+    }
+    else if (modType == 3) {
+        modName = "SGP";
+        emit logMessage("Selected SGP Cleanup");
+        modFilesTemplates["Output/<lang>/SGP_main_l_<lang>.yml"] << "VanillaFiles/<lang>/vanilla_main_l_<lang>.yml";
+    }
 
-    QRegularExpression keyExp("^ +(.+?):[0-9]? +\"([^\"\\\\]*)\"");
-    unordered_map<QString, unordered_set<string>> usedTags;
+    // Use std::regex for key extraction, consistent with Cleanup.cpp's approach
+    std::regex keyExp("([A-Z0-9_\\\\\\.:-]+):0 \\\""); 
+    std::smatch matches;
 
-    emit statusMessage("Loading existing localisation tags");
-    emit logMessage("Loading Tags"); // Detailed log
-    bool success = true;
+    std::unordered_map<QString, std::unordered_set<std::string>> usedTags;
+
+    emit statusMessage("Loading existing localization tags...");
+    emit logMessage("Loading tags from output files...");
+
+    // First pass: Load existing localization tags from the mod's output files
     for (const auto& lang : languages) {
-        for (const auto& fileTemplate : modFilesTemplates) {
-            QString filename = QString(fileTemplate).replace("<lang>", lang);
-            QFile file("Output/" + lang + "/" + filename);
-            if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                // Not a critical error, might be a file that doesn't exist yet
-                emit logMessage("Skipped (file not found): " + filename);
+        QString langLower = lang.toLower();
+        for (const QString& outputPathTemplate : modFilesTemplates.keys()) {
+            QString outputPath = outputPathTemplate;
+            outputPath.replace("<lang>", langLower);
+
+            QFile outputFile(outputPath);
+            if (!outputFile.exists()) {
+                // If the output file doesn't exist, there are no tags to load from it for this language
                 continue;
             }
-            QTextStream in(&file);
+
+            if (!outputFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                emit logMessage("WARNING: Could not open output file for reading: " + outputPath);
+                continue;
+            }
+
+            QTextStream in(&outputFile);
             while (!in.atEnd()) {
-                string line = in.readLine().toStdString();
-                QRegularExpressionMatch match = keyExp.match(QString::fromStdString(line));
-                if (match.hasMatch()) {
-                    usedTags[lang].insert(match.captured(1).toStdString());
+                QString line = in.readLine();
+                std::string stdLine = line.toStdString();
+                if (std::regex_search(stdLine, matches, keyExp)) {
+                    std::string tag = matches[1].str(); 
+                    usedTags[lang].insert(tag);
                 }
             }
-            file.close();
-            emit logMessage("[LOADED] " + filename);
+            outputFile.close();
         }
     }
-    emit logMessage("Tag loading complete");
-    emit progressUpdated(25);
+    emit logMessage("Loaded " + QString::number(usedTags.size()) + " languages' tags.");
 
-    emit statusMessage("Updating files from VanillaFiles");
-    emit logMessage("\nUpdating files from VanillaFiles"); // Detailed log
-    QDir vanillaDir("VanillaFiles");
-    if (!vanillaDir.exists()) {
-        emit logMessage("ERROR: 'VanillaFiles' folder not found!");
-        emit taskFinished(false, "Required 'VanillaFiles' folder not found. Please create it.");
-        return;
-    }
+    emit statusMessage("Updating localization files from vanilla...");
+    emit logMessage("Processing vanilla files and filtering...");
 
-    QStringList langDirs = vanillaDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-    int langCount = 0;
-    for (const auto& lang : langDirs) {
-        if (std::find(languages.begin(), languages.end(), lang) == languages.end()) {
+    // Second pass: Process vanilla files and create updated output files
+    bool success = true;
+    for (const auto& lang : languages) {
+        QString langLower = lang.toLower();
+        if (langLower == "italian") {
+            emit logMessage("Skipping Italian language for cleanup.");
             continue;
         }
 
-        QDir sourceDir("VanillaFiles/" + lang);
-        QDir destDir("Output/" + lang);
-        if (!destDir.exists()) destDir.mkpath(".");
+        for (const auto& outputPathTemplate : modFilesTemplates.keys()) {
+            QString outputPath = outputPathTemplate;
+            outputPath.replace("<lang>", langLower);
 
-        QStringList files = sourceDir.entryList(QStringList() << "*.yml", QDir::Files);
+            QStringList vanillaInputPaths = modFilesTemplates.value(outputPathTemplate); 
+            if (vanillaInputPaths.isEmpty()) continue; 
 
-        for (const auto& fileName : files) {
-            QFile inFile("VanillaFiles/" + lang + "/" + fileName);
-            QFile outFile("Output/" + lang + "/" + fileName);
+            QString vanillaInputPath = vanillaInputPaths.first();
+            vanillaInputPath.replace("<lang>", langLower);
 
-            if (!inFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                emit logMessage("ERROR: Could not open vanilla file: " + lang + "/" + fileName);
+            QFile vanillaFile(vanillaInputPath);
+            if (!vanillaFile.exists()) {
+                emit logMessage("WARNING: Vanilla input file does not exist: " + vanillaInputPath);
+                continue;
+            }
+            if (!vanillaFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                emit logMessage("ERROR: Could not open vanilla file for reading: " + vanillaInputPath);
                 success = false;
                 continue;
             }
 
-            vector<string> fileData;
-            bool fileChanged = false;
+            // Prepare the output directory
+            QDir outputDir;
+            outputDir.mkpath(QFileInfo(outputPath).path());
 
-            QTextStream in(&inFile);
-            while (!in.atEnd()) {
-                string line = in.readLine().toStdString();
-                QRegularExpressionMatch match = keyExp.match(QString::fromStdString(line));
-                if (match.hasMatch()) {
-                    if (usedTags[lang].find(match.captured(1).toStdString()) == usedTags[lang].end()) {
-                        fileData.push_back(line);
-                    }
-                    else {
-                        fileChanged = true; // This line was removed
+            QFile outputFile(outputPath + ".temp"); // Write to a temp file first
+            if (!outputFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                emit logMessage("ERROR: Could not create temporary output file: " + outputPath + ".temp");
+                success = false;
+                vanillaFile.close();
+                continue;
+            }
+
+            QTextStream inVanilla(&vanillaFile);
+            QTextStream outOutput(&outputFile);
+            outOutput.setEncoding(QStringConverter::Utf8);
+            outOutput.setGenerateByteOrderMark(true);
+
+            outOutput << "l_" << langLower << ":\n"; // Write YAML header
+
+            while (!inVanilla.atEnd()) {
+                QString line = inVanilla.readLine();
+                std::string stdLine = line.toStdString(); 
+                if (std::regex_search(stdLine, matches, keyExp)) {
+                    std::string tag = matches[1].str();
+                    // Only include lines whose tags are NOT found in usedTags (i.e., new vanilla tags)
+                    if (usedTags.find(lang) == usedTags.end() || usedTags[lang].find(tag) == usedTags[lang].end()) {
+                        outOutput << line << "\n";
                     }
                 }
                 else {
-                    fileData.push_back(line);
+                    // Include lines that don't match the regex (e.g., comments, empty lines, other structures)
+                    outOutput << line << "\n";
                 }
             }
-            inFile.close();
+            vanillaFile.close();
+            outputFile.close();
 
-            if (fileChanged) {
-                if (outFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-                    QTextStream out(&outFile);
-                    out.setEncoding(QStringConverter::Utf8);
-                    out.setGenerateByteOrderMark(true);
-                    for (const auto& line : fileData) {
-                        out << QString::fromStdString(line) << "\n";
-                    }
-                    outFile.close();
-                    emit logMessage(lang + "/" + fileName + " updated");
-                }
-                else {
-                    emit logMessage("ERROR: Could not write updated file: " + lang + "/" + fileName);
+            // Replace original file with temp file
+            if (QFile::remove(outputPath)) {
+                if (!QFile::rename(outputPath + ".temp", outputPath)) {
+                    emit logMessage("ERROR: Could not rename temp file to " + outputPath);
                     success = false;
                 }
             }
+            else {
+                // Original file didn't exist or couldn't be removed, try to just rename
+                if (!QFile::rename(outputPath + ".temp", outputPath)) {
+                    emit logMessage("ERROR: Could not rename temp file to " + outputPath);
+                    success = false;
+                }
+            }
+            emit logMessage("Updated: " + outputPath);
         }
-        langCount++;
-        emit progressUpdated(25 + (langCount * 50 / langDirs.size()));
     }
 
     emit statusMessage("Copying name lists");
-    emit logMessage("\nCopying name_lists and random_names"); // Detailed log
+    emit logMessage("\nCopying name_lists and random_names"); 
+    // Copy name_lists and random_names folders for each language
     for (const auto& lang : languages) {
         QStringList subfoldersToCopy = { "name_lists", "random_names" };
         for (const auto& subfolder : subfoldersToCopy) {
             QDir sourceDir("VanillaFiles/" + lang + "/" + subfolder);
             if (sourceDir.exists()) {
                 QDir destDir("Output/" + lang + "/" + subfolder);
-                if (!destDir.exists()) destDir.mkpath(".");
+                if (!destDir.exists()) destDir.mkpath("."); // Create destination path
+                else {
+                    // Clear existing files in destDir to ensure clean copy
+                    QStringList oldFiles = destDir.entryList(QDir::Files | QDir::NoDotAndDotDot);
+                    for (const QString& oldFile : oldFiles) {
+                        QFile::remove(destDir.filePath(oldFile));
+                    }
+                }
 
                 QStringList files = sourceDir.entryList(QDir::Files);
                 for (const auto& file : files) {
+                    // Use QFile::copy which is platform-independent
                     if (!QFile::copy(sourceDir.filePath(file), destDir.filePath(file))) {
-                        // If copy fails, it might be due to file already existing, or permissions.
-                        // For a robust app, you'd add QIODevice::CopyOverwrite, but for now log it.
-                        emit logMessage("WARNING: Failed to copy " + sourceDir.filePath(file) + " to " + destDir.filePath(file));
+                        emit logMessage("WARNING: Failed to copy " + sourceDir.filePath(file) + " to " + destDir.filePath(file) + " (May already exist or permissions issue).");
                     }
                 }
                 emit logMessage("Copied " + subfolder + " for " + lang);
@@ -336,6 +394,7 @@ void Worker::runCleanupProcess(int modType)
     }
     emit progressUpdated(100);
 
+    // Emit final result
     if (success) {
         emit taskFinished(true, "Cleanup and update task completed successfully!");
     }
