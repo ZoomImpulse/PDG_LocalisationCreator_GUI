@@ -4,8 +4,8 @@
 #include <QString>
 #include <QVector>
 #include <QMap>
-#include <QMutex>         
-#include <QWaitCondition> 
+#include <QMutex>
+#include <QWaitCondition>
 
 // Worker class handles background localisation creation and cleanup tasks in a separate thread.
 class Worker : public QObject
@@ -18,9 +18,9 @@ public:
 
 public slots:
     // Starts the localisation creation process for the selected mod type.
-    void doCreateTask(int modType);
+    void doCreateTask(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath);
     // Starts the cleanup and update process for the selected mod type.
-    void doCleanupTask(int modType);
+    void doCleanupTask(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath);
 
 signals:
     // Emitted to log a message (for file or UI logging).
@@ -34,9 +34,9 @@ signals:
 
 private:
     // Internal method to perform the localisation creation logic.
-    void runCreateProcess(int modType);
+    void runCreateProcess(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath);
     // Internal method to perform the cleanup and update logic.
-    void runCleanupProcess(int modType);
+    void runCleanupProcess(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath);
 
     bool m_outputFolderClearConfirmed; // Flag to confirm output folder was cleared (not used in current logic).
     QMutex m_mutex;                    // Mutex for thread safety (reserved for future use).

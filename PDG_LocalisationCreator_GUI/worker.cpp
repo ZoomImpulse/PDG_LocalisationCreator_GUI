@@ -15,32 +15,32 @@
 Worker::Worker(QObject* parent) : QObject(parent) {}
 
 // Slot to start the creation process for a given mod type
-void Worker::doCreateTask(int modType)
+void Worker::doCreateTask(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath)
 {
-    runCreateProcess(modType);
+    runCreateProcess(modType, inputPath, outputPath, vanillaPath);
 }
 
 // Slot to start the cleanup process for a given mod type
-void Worker::doCleanupTask(int modType)
+void Worker::doCleanupTask(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath)
 {
-    runCleanupProcess(modType);
+    runCleanupProcess(modType, inputPath, outputPath, vanillaPath);
 }
 
 // Main logic for creating localisation files based on modType
-void Worker::runCreateProcess(int modType)
+void Worker::runCreateProcess(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath)
 {
     emit progressUpdated(0);
-    emit statusMessage("Starting localisation creation"); 
+    emit statusMessage("Starting localisation creation");
 
     // Clear Output folder before starting
-    emit logMessage("Clearing contents of Output folder");
+    emit logMessage("Clearing contents of Output folder: " + outputPath);
     emit statusMessage("Clearing previous output");
-    QDir outputDir("_WorkDirectory/Output");
+    QDir outputDir(outputPath);
 
     // Create Output directory if it doesn't exist
     if (!outputDir.exists()) {
-        if (!QDir::current().mkpath("_WorkDirectory/Output")) {
-            emit logMessage("ERROR: Could not create Output folder!");
+        if (!outputDir.mkpath(".")) { // Use mkpath(".") on the QDir object itself
+            emit logMessage("ERROR: Could not create Output folder at: " + outputPath);
             emit taskFinished(false, "Failed to prepare output directory.");
             return;
         }
@@ -70,12 +70,19 @@ void Worker::runCreateProcess(int modType)
             }
         }
     }
-    emit logMessage("_WorkDirectory/Output folder contents cleared.");
+    emit logMessage(outputPath + " folder contents cleared.");
 
     // Prepare file name mappings for each mod type
     std::vector<std::pair<QString, QString>> filenames;
-    QDir::current().mkpath("_WorkDirectory/Input");
-    QDir::current().mkpath("_WorkDirectory/Output");
+    // Ensure input and output directories exist (output already checked)
+    QDir inputDir(inputPath);
+    if (!inputDir.exists()) {
+        if (!inputDir.mkpath(".")) {
+            emit logMessage("ERROR: Could not create Input folder at: " + inputPath);
+            emit taskFinished(false, "Failed to prepare input directory.");
+            return;
+        }
+    }
 
     QString modName;
     if (modType == 1) {
@@ -102,31 +109,32 @@ void Worker::runCreateProcess(int modType)
             { "SW Fallen Republic - Synced Localisation.json", "SWFR_synced_l_<lang>.yml" }
         };
     }
-    else if (modType == 3) {
-        modName = "SGP";
-        emit logMessage("Selected SGP Localisation");
-        filenames = {
-            { "SGP - Main Localisation.json", "SGP_main_l_<lang>.yml" },
-        };
-    }
+    // Removed SGP mod type and its associated files
+    // else if (modType == 3) {
+    //     modName = "SGP";
+    //     emit logMessage("Selected SGP Localisation");
+    //     filenames = {
+    //         { "SGP - Main Localisation.json", "SGP_main_l_<lang>.yml" },
+    //     };
+    // }
 
     emit statusMessage("Processing " + modName + " localisation files");
 
     // Regex for extracting translation entries and escaping
     std::regex translationExp("\"[^(]+\\(([^)]+)\\)\" *: *\"( *[^:]+: *[^]*)\"");
-    std::regex escapeExp("\\\\([^])"); 
+    std::regex escapeExp("\\\\([^])");
 
     bool success = true;
     // Process each input file and generate output files for each language
     for (const auto& filePair : filenames) {
-        QString inputPath = "_WorkDirectory/Input/" + filePair.first;
-        emit logMessage("\n-> Processing: " + inputPath);
+        QString currentInputPath = QDir(inputPath).filePath(filePair.first);
+        emit logMessage("\n-> Processing: " + currentInputPath);
         emit statusMessage("Reading " + filePair.first);
 
-        QFile inputFile(inputPath);
+        QFile inputFile(currentInputPath);
 
         if (!inputFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            emit logMessage("ERROR: Could not open file: " + inputPath);
+            emit logMessage("ERROR: Could not open file: " + currentInputPath);
             emit taskFinished(false, "Failed to open input file: " + filePair.first);
             return;
         }
@@ -137,9 +145,9 @@ void Worker::runCreateProcess(int modType)
 
         QTextStream in(&inputFile);
         while (!in.atEnd()) {
-            QString line = in.readLine();     
-            std::string stdLine = line.toStdString();  
-            if (std::regex_search(stdLine, matches, translationExp)) { 
+            QString line = in.readLine();
+            std::string stdLine = line.toStdString();
+            if (std::regex_search(stdLine, matches, translationExp)) {
                 std::string lang = matches[1].str();
                 std::string text = std::regex_replace(matches[2].str(), escapeExp, "$1");
                 translations[lang].push_back(text);
@@ -160,14 +168,16 @@ void Worker::runCreateProcess(int modType)
             }
 
             QString langLower = language.toLower();
-            QDir::current().mkpath("_WorkDirectory/Output/" + langLower);
+            QDir currentOutputDir(outputPath);
+            currentOutputDir.mkpath(langLower); // Create language subfolder in output
 
             QString outFileName = filePair.second;
             outFileName.replace("<lang>", langLower);
 
-            QFile outputFile("_WorkDirectory/Output/" + langLower + "/" + outFileName);
+            QString fullOutputPath = currentOutputDir.filePath(langLower + "/" + outFileName);
+            QFile outputFile(fullOutputPath);
             if (!outputFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                emit logMessage("ERROR: Could not write to file " + outFileName);
+                emit logMessage("ERROR: Could not write to file " + fullOutputPath);
                 success = false;
                 continue;
             }
@@ -182,6 +192,7 @@ void Worker::runCreateProcess(int modType)
                 out << " " << QString::fromStdString(line) << "\n";
             }
             outputFile.close();
+            emit logMessage("Wrote file: " + fullOutputPath);
         }
     }
     // Emit final result
@@ -193,10 +204,7 @@ void Worker::runCreateProcess(int modType)
     }
 }
 // Main logic for cleaning up and updating localisation files based on modType
-// Main logic for cleaning up and updating localisation files based on modType
-// In worker.cpp
-
-void Worker::runCleanupProcess(int modType)
+void Worker::runCleanupProcess(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath)
 {
     emit progressUpdated(0);
     emit statusMessage("Starting localization cleanup and update");
@@ -215,28 +223,29 @@ void Worker::runCleanupProcess(int modType)
     if (modType == 1) {
         modName = "STNH";
         emit logMessage("Selected STNH Cleanup");
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/STH_main_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/STH_ships_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/STH_modifiers_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/STH_tech_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/STH_events_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/STH_synced_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/STH_main_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/STH_ships_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/STH_modifiers_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/STH_tech_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/STH_events_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/STH_synced_l_<lang>.yml", QStringList());
     }
     else if (modType == 2) {
         modName = "SWFR";
         emit logMessage("Selected SWFR Cleanup");
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/SWFR_main_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/SWFR_ships_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/SWFR_modifiers_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/SWFR_tech_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/SWFR_events_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/SWFR_synced_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_main_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_ships_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_modifiers_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_tech_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_events_l_<lang>.yml", QStringList());
+        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_synced_l_<lang>.yml", QStringList());
     }
-    else if (modType == 3) {
-        modName = "SGP";
-        emit logMessage("Selected SGP Cleanup");
-        modFilesTemplates.insert("_WorkDirectory/Output/<lang>/SGP_main_l_<lang>.yml", QStringList());
-    }
+    // Removed SGP mod type and its associated files
+    // else if (modType == 3) {
+    //     modName = "SGP";
+    //     emit logMessage("Selected SGP Cleanup");
+    //     modFilesTemplates.insert(outputPath + "/<lang>/SGP_main_l_<lang>.yml", QStringList());
+    // }
 
     emit logMessage("DEBUG: modFilesTemplates size after initialization: " + QString::number(modFilesTemplates.size()) + " for modType " + QString::number(modType));
 
@@ -258,17 +267,17 @@ void Worker::runCleanupProcess(int modType)
         QString langLower = lang.toLower();
         int tagsLoadedForLang = 0;
         for (const QString& outputPathTemplate : modFilesTemplates.keys()) {
-            QString outputPath = outputPathTemplate;
-            outputPath.replace("<lang>", langLower);
+            QString outputPathWithLang = outputPathTemplate;
+            outputPathWithLang.replace("<lang>", langLower);
 
-            QFile outputFile(outputPath);
+            QFile outputFile(outputPathWithLang);
             if (!outputFile.exists()) {
-                emit logMessage("INFO: Mod output file does not exist for loading tags: " + outputPath);
+                emit logMessage("INFO: Mod output file does not exist for loading tags: " + outputPathWithLang);
                 continue;
             }
 
             if (!outputFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                emit logMessage("ERROR: Could not open mod output file for reading tags: " + outputPath);
+                emit logMessage("ERROR: Could not open mod output file for reading tags: " + outputPathWithLang);
                 continue;
             }
 
@@ -283,7 +292,7 @@ void Worker::runCleanupProcess(int modType)
                 }
             }
             outputFile.close();
-            emit logMessage("INFO: Loaded " + QString::number(tagsLoadedForLang) + " tags from " + outputPath + " for " + lang + ".");
+            emit logMessage("INFO: Loaded " + QString::number(tagsLoadedForLang) + " tags from " + outputPathWithLang + " for " + lang + ".");
             tagsLoadedForLang = 0;
         }
         emit logMessage("INFO: Total unique tags loaded for " + lang + ": " + QString::number(usedTags[lang].size()));
@@ -304,13 +313,17 @@ void Worker::runCleanupProcess(int modType)
             continue;
         }
 
-        QDir vanillaLangDir("_WorkDirectory/Vanillafiles/" + lang);
+        QDir vanillaLangDir(vanillaPath + "/" + lang);
         if (!vanillaLangDir.exists()) {
             emit logMessage("WARNING: Vanilla language directory does not exist: " + vanillaLangDir.path());
             continue;
         }
 
-        QDir::current().mkpath("_WorkDirectory/Output/" + lang);
+        QDir outputLangDir(outputPath + "/" + lang);
+        if (!outputLangDir.exists()) {
+            outputLangDir.mkpath(".");
+        }
+
 
         QStringList vanillaFiles = vanillaLangDir.entryList(QStringList() << "*.yml", QDir::Files, QDir::Name);
 
@@ -351,7 +364,7 @@ void Worker::runCleanupProcess(int modType)
             vanillaFile.close();
 
             if (fileChanged) {
-                QString cleanedOutputPath = "_WorkDirectory/Output/" + lang + "/" + vanillaFileName;
+                QString cleanedOutputPath = outputLangDir.filePath(vanillaFileName);
                 QFile cleanedOutputFile(cleanedOutputPath);
                 if (!cleanedOutputFile.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
                     emit logMessage("ERROR: Could not write cleaned file: " + cleanedOutputPath);
@@ -382,9 +395,9 @@ void Worker::runCleanupProcess(int modType)
     for (const auto& lang : languages) {
         QStringList subfoldersToCopy = { "name_lists", "random_names" };
         for (const auto& subfolder : subfoldersToCopy) {
-            QDir sourceDir("_WorkDirectory/Vanillafiles/" + lang + "/" + subfolder);
+            QDir sourceDir(vanillaPath + "/" + lang + "/" + subfolder);
             if (sourceDir.exists()) {
-                QDir destDir("_WorkDirectory/Output/" + lang + "/" + subfolder);
+                QDir destDir(outputPath + "/" + lang + "/" + subfolder);
                 if (!destDir.exists()) destDir.mkpath(".");
                 else {
                     QStringList oldFiles = destDir.entryList(QDir::Files | QDir::NoDotAndDotDot);

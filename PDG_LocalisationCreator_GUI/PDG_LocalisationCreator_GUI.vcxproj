@@ -92,6 +92,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ConfigManager.cpp" />
     <ClCompile Include="worker.cpp" />
     <QtRcc Include="PDG_LocalisationCreator_GUI.qrc" />
     <QtUic Include="PDG_LocalisationCreator_GUI.ui" />
@@ -101,6 +102,9 @@
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="worker.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <QtMoc Include="ConfigManager.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
