@@ -60,7 +60,6 @@ private:
     Worker* worker;                           // Pointer to the background worker.
     QLabel* statusLabel;                      // Label for displaying status messages.
     bool isCleanupStep;                       // Flag to track if the cleanup step is running.
-    QScopedPointer<QTextStream> logFileStream;// Scoped pointer for the log file stream.
     QString currentLogFileName;               // Name of the current log file.
 
     ConfigManager* configManager;             // New: Instance of ConfigManager

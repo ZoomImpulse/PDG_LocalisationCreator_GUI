@@ -19,6 +19,7 @@ PDG_LocalisationCreator_GUI::PDG_LocalisationCreator_GUI(QWidget* parent)
 {
     ui->setupUi(this);
 
+
     cleanOldLogs(); // Remove old log files at startup
 
     // Initialize the cleanup step flag
@@ -30,18 +31,11 @@ PDG_LocalisationCreator_GUI::PDG_LocalisationCreator_GUI(QWidget* parent)
 
     // Create and add the status label to the layout
     statusLabel = new QLabel("Ready", this);
-    // Removed: ui->verticalLayout_2->insertWidget(2, ui->progressBar); // This line caused progressBar to move above actionBox
-    ui->verticalLayout_2->insertWidget(4, statusLabel);    // Insert at index 4, after progressBar (which is at index 3 in .ui)
-
+    statusLabel->setAlignment(Qt::AlignCenter);
+    ui->verticalLayout_progressBar->insertWidget(0, statusLabel); // Insert at position 0 to put it above the progress bar
 
     // Ensure progress bar text is visible
     ui->progressBar->setTextVisible(true);
-
-    // Connect signals for folder selection buttons
-    connect(ui->inputPathButton, &QPushButton::clicked, this, &PDG_LocalisationCreator_GUI::on_inputPathButton_clicked);
-    connect(ui->outputPathButton, &QPushButton::clicked, this, &PDG_LocalisationCreator_GUI::on_outputPathButton_clicked);
-    connect(ui->vanillaPathButton, &QPushButton::clicked, this, &PDG_LocalisationCreator_GUI::on_vanillaPathButton_clicked);
-
 
     // Initialize ConfigManager and load settings
     configManager = new ConfigManager(this); // Parented to GUI
@@ -70,10 +64,6 @@ PDG_LocalisationCreator_GUI::~PDG_LocalisationCreator_GUI()
     savePathsToConfig();
 
     // If a log file stream is open, ensure it's closed
-    if (logFileStream) {
-        logFileStream->flush();
-        logFileStream.reset(); // Closes the file and deletes QTextStream
-    }
     delete ui;
 }
 
@@ -114,34 +104,10 @@ void PDG_LocalisationCreator_GUI::on_unifiedRunButton_clicked()
             logsDir.mkpath("."); // Create "logs" directory
         }
 
-        QFile* logFile = new QFile(currentLogFileName); // Dynamically allocated
-        // Check if the file can be opened
-        if (logFile->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-            logFileStream.reset(new QTextStream(logFile)); // QScopedPointer now owns QTextStream, and QTextStream owns logFile
-            logFileStream->setEncoding(QStringConverter::Utf8);
-            *logFileStream << "--- Log Session Started: " << currentDateTime.toString(Qt::ISODate) << " ---\n";
-            logFileStream->flush();
-            // Access device via dereferenced pointer
-            if ((*logFileStream).device()) { // Ensure device exists before calling methods on it
-                (*logFileStream).device()->setTextModeEnabled(true);
-            }
-            else {
-                writeToLogFile("WARNING: QTextStream's QIODevice is null after creation.");
-            }
-        }
-        else {
-            // If file cannot be opened, cleanup the allocated QFile*
-            delete logFile; // Delete only if QTextStream did not take ownership
-            logFile = nullptr; // Prevent dangling pointer
-            logFileStream.reset(); // Ensure scoped pointer is cleared
-            setUiEnabled(true);
-            statusLabel->setText("Error: Could not open log file.");
-            QMessageBox::critical(this, "Log File Error", "Could not open log file for writing to: " + currentLogFileName);
-            return; // Exit early if log file can't be opened
-        }
-
-        // Add a guaranteed log message here to check if logFileStream is working
-        writeToLogFile("DEBUG GUI: Log file stream initialized and ready.");
+        // Just write an initial message to ensure the file is created and accessible
+        // The writeToLogFile function will handle opening/closing.
+        writeToLogFile("--- Log Session Started: " + currentDateTime.toString(Qt::ISODate) + " ---");
+        writeToLogFile("DEBUG GUI: Log file system initialized and ready.");
 
         // Write initial log entries
         writeToLogFile("STARTING NEW LOCALISATION PROCESS");
@@ -178,12 +144,6 @@ void PDG_LocalisationCreator_GUI::handleTaskFinished(bool success, const QString
     writeToLogFile("Final Message: " + message);
     if (!success) {
         writeToLogFile("Please check this log file for detailed errors.");
-    }
-
-    // Ensure log file stream is flushed and closed
-    if (logFileStream) {
-        logFileStream->flush();
-        logFileStream.reset(); // Closes the file
     }
 
     if (!isCleanupStep) { // If the creation task just finished
@@ -242,26 +202,18 @@ void PDG_LocalisationCreator_GUI::handleStatusMessage(const QString& message)
 // Slot: Writes a message to the log file with a timestamp
 void PDG_LocalisationCreator_GUI::writeToLogFile(const QString& message)
 {
-    // Try to write using QTextStream as before
-    // Check if the scoped pointer is valid and if the underlying stream has an open device
-    if (logFileStream && (*logFileStream).device() && (*logFileStream).device()->isOpen()) {
-        *logFileStream << "[" << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "] " << message << "\n";
-        logFileStream->flush();
+    // Use the stored currentLogFileName
+    QFile logFile(currentLogFileName);
+    if (logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        QTextStream out(&logFile);
+        out.setEncoding(QStringConverter::Utf8); // Ensure fallback also uses UTF-8
+        out << "[" << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "] " << message << "\n";
+        out.flush();
+        logFile.close(); // Close the file immediately after writing
     }
-    // If QTextStream is not valid or not open, try to open the file directly and append
     else {
-        QFile fallbackLogFile(currentLogFileName);
-        if (fallbackLogFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-            QTextStream out(&fallbackLogFile);
-            out.setEncoding(QStringConverter::Utf8); // Ensure fallback also uses UTF-8
-            out << "[" << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss") << "] FALLBACK_LOG: " << message << "\n";
-            out.flush();
-            fallbackLogFile.close(); // Close the file immediately after writing
-        }
-        else {
-            // Log that even fallback failed, if possible
-            qDebug() << "ERROR: Failed to open fallback log file: " << currentLogFileName;
-        }
+        // If even this fails, print to debug console as a last resort
+        qDebug() << "ERROR: Failed to open log file for writing: " << currentLogFileName << " Message: " << message;
     }
 }
 
@@ -270,7 +222,6 @@ void PDG_LocalisationCreator_GUI::setUiEnabled(bool enabled)
 {
     ui->modSelectionBox->setEnabled(enabled);
     ui->actionBox->setEnabled(enabled);
-    // Enable/disable the new folder selection UI elements
     ui->inputPathLineEdit->setEnabled(enabled);
     ui->inputPathButton->setEnabled(enabled);
     ui->outputPathLineEdit->setEnabled(enabled);
@@ -327,6 +278,7 @@ void PDG_LocalisationCreator_GUI::on_inputPathButton_clicked()
     QString dir = QFileDialog::getExistingDirectory(this, "Select Input Directory", ui->inputPathLineEdit->text());
     if (!dir.isEmpty()) {
         ui->inputPathLineEdit->setText(QDir::toNativeSeparators(dir));
+
     }
 }
 
@@ -364,10 +316,3 @@ void PDG_LocalisationCreator_GUI::savePathsToConfig()
     configManager->saveSetting("Paths/VanillaPath", ui->vanillaPathLineEdit->text());
     qDebug() << "Saved configuration paths.";
 }
-
-// Removed: New Slot: Handle Save Config Button click (no longer needed)
-// void PDG_LocalisationCreator_GUI::on_saveConfigButton_clicked()
-// {
-//     savePathsToConfig();
-//     QMessageBox::information(this, "Settings Saved", "Folder paths have been saved successfully!");
-// }
