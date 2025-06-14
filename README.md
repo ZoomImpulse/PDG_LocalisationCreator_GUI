@@ -113,6 +113,6 @@ cd PDG-Localisation-Creator
 
 The application generates timestamped log files in a `logs directory (e.g., `logs/log_2023-10-27_14-30-00.txt`). These logs provide detailed information about the processing steps, warnings, and errors. Old log files (from previous days) are automatically cleaned up on startup.
 
-##Contact
+## Contact
 
 For any questions, issues, or feedback, please open an issue on the GitHub Issues page.
