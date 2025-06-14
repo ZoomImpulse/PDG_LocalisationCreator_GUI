@@ -12,11 +12,8 @@ This tool helps mod creators manage translation files by converting JSON input i
 - [Getting Started](#getting-started)  
   - [Prerequisites](#prerequisites)  
   - [Building the Project](#building-the-project)  
-  - [Usage](#usage)
-- [Project Structure](#project-structure)  
-- [Logging](#logging)  
-- [Contributing](#contributing)  
-- [License](#license)  
+  - [Usage](#usage) 
+- [Logging](#logging)
 - [Contact](#contact)  
 
 ---
