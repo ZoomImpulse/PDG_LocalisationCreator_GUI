@@ -77,7 +77,7 @@ The application operates in two main phases:
 #### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/ZoomImpulse/PDG-Localisation-Creator.git
+git clone https://github.com/ZoomImpulse/PDG_LocalisationCreator_GUI.git
 cd PDG-Localisation-Creator
 ```
 
