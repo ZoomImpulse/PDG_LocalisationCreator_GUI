@@ -3,6 +3,8 @@
 A **Qt-based desktop application** designed to streamline the creation and cleanup of localisation files for Stellaris mods made by PDG.  
 This tool helps PDG members manage translation files by converting JSON input into a game-compatible YML format and cleaning up vanilla localisation files based on existing mod entries.
 
+![grafik](https://github.com/user-attachments/assets/85d2e5f6-437c-46ad-a3bb-7e37e73921dc)
+
 ---
 
 ## Table of Contents
