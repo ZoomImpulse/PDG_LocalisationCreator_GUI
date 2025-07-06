@@ -1,7 +1,7 @@
 # PDG Localisation Creator GUI
 
 A **Qt-based desktop application** designed to streamline the creation and cleanup of localisation files for Stellaris mods made by PDG.  
-This tool helps PDG members manage translation files by converting JSON input into a game-compatible YML format and cleaning up vanilla localisation files based on existing mod entries.
+This tool helps PDG developers manage translation files by converting JSON input into a game-compatible YML format and cleaning up vanilla localisation files based on existing mod entries.
 
 ![grafik](https://github.com/user-attachments/assets/85d2e5f6-437c-46ad-a3bb-7e37e73921dc)
 
@@ -122,6 +122,11 @@ After building, your executable (`.exe`) requires Qt's DLLs to run on other mach
 ## Logging
 
 The application generates timestamped log files in a `logs directory (e.g., `logs/log_2023-10-27_14-30-00.txt`). These logs provide detailed information about the processing steps, warnings, and errors. Old log files (from previous days) are automatically cleaned up on startup.
+
+## Credits
+This project is based on the work of https://github.com/oninoni/PDG_Utilities. 
+
+**Credits to Oninoni!**
 
 ## Contact
 
