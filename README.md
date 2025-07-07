@@ -16,6 +16,7 @@ This tool helps PDG developers manage translation files by converting JSON input
   - [Building the Project](#building-the-project)  
   - [Usage](#usage) 
 - [Logging](#logging)
+- [Credits](#credits)
 - [Contact](#contact)  
 
 ---
