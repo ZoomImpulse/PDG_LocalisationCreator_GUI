@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <regex>
+#include <algorithm>
 
 // Constructor for Worker class
 Worker::Worker(QObject* parent) : QObject(parent) {}
@@ -188,7 +189,10 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
             out.setGenerateByteOrderMark(true);
 
             out << "l_" << langLower << ":\n";
-            for (const auto& line : entry.second) {
+            std::vector<std::string> sortedLines = entry.second;
+            std::sort(sortedLines.begin(), sortedLines.end());
+
+            for (const auto& line : sortedLines) {
                 out << " " << QString::fromStdString(line) << "\n";
             }
             outputFile.close();
