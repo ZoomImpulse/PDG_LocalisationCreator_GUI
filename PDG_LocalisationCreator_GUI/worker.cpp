@@ -85,31 +85,17 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
         }
     }
 
-    QString modName;
-    if (modType == 1) {
-        modName = "STNH";
-        emit logMessage("Selected STNH Localisation");
-        filenames = {
-            { "ST New Horizons - Main Localisation.json", "STH_main_l_<lang>.yml" },
-            { "ST New Horizons - Ships Localisation.json", "STH_ships_l_<lang>.yml" },
-            { "ST New Horizons - Modifiers Localisation.json", "STH_modifiers_l_<lang>.yml" },
-            { "ST New Horizons - Events Localisation.json", "STH_events_l_<lang>.yml" },
-            { "ST New Horizons - Tech Localisation.json", "STH_tech_l_<lang>.yml" },
-            { "ST New Horizons - Synced Localisation.json", "STH_synced_l_<lang>.yml" }
-        };
-    }
-    else if (modType == 2) {
-        modName = "SWFR";
-        emit logMessage("Selected SWFR Localisation");
-        filenames = {
-            { "SW Fallen Republic - Main Localisation.json", "SWFR_main_l_<lang>.yml" },
-            { "SW Fallen Republic - Ships Localisation.json", "SWFR_ships_l_<lang>.yml" },
-            { "SW Fallen Republic - Modifiers Localisation.json", "SWFR_modifiers_l_<lang>.yml" },
-            { "SW Fallen Republic - Events Localisation.json", "SWFR_events_l_<lang>.yml" },
-            { "SW Fallen Republic - Tech Localisation.json", "SWFR_tech_l_<lang>.yml" },
-            { "SW Fallen Republic - Synced Localisation.json", "SWFR_synced_l_<lang>.yml" }
-        };
-    }
+    QString modName = "STNH";
+    emit logMessage("Selected STNH Localisation");
+    filenames = {
+        { "ST New Horizons - Main Localisation.json", "STH_main_l_<lang>.yml" },
+        { "ST New Horizons - Ships Localisation.json", "STH_ships_l_<lang>.yml" },
+        { "ST New Horizons - Modifiers Localisation.json", "STH_modifiers_l_<lang>.yml" },
+        { "ST New Horizons - Events Localisation.json", "STH_events_l_<lang>.yml" },
+        { "ST New Horizons - Tech Localisation.json", "STH_tech_l_<lang>.yml" },
+        { "ST New Horizons - Synced Localisation.json", "STH_synced_l_<lang>.yml" }
+    };
+    // Only STNH supported
     // Removed SGP mod type and its associated files
     // else if (modType == 3) {
     //     modName = "SGP";
@@ -223,27 +209,15 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
 
     // Define the file templates based on modType - used only for First Pass (loading mod tags)
     QMap<QString, QStringList> modFilesTemplates;
-    QString modName;
-    if (modType == 1) {
-        modName = "STNH";
-        emit logMessage("Selected STNH Cleanup");
-        modFilesTemplates.insert(outputPath + "/<lang>/STH_main_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert(outputPath + "/<lang>/STH_ships_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert(outputPath + "/<lang>/STH_modifiers_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert(outputPath + "/<lang>/STH_tech_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert(outputPath + "/<lang>/STH_events_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert(outputPath + "/<lang>/STH_synced_l_<lang>.yml", QStringList());
-    }
-    else if (modType == 2) {
-        modName = "SWFR";
-        emit logMessage("Selected SWFR Cleanup");
-        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_main_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_ships_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_modifiers_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_tech_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_events_l_<lang>.yml", QStringList());
-        modFilesTemplates.insert(outputPath + "/<lang>/SWFR_synced_l_<lang>.yml", QStringList());
-    }
+    QString modName = "STNH";
+    emit logMessage("Selected STNH Cleanup");
+    modFilesTemplates.insert(outputPath + "/<lang>/STH_main_l_<lang>.yml", QStringList());
+    modFilesTemplates.insert(outputPath + "/<lang>/STH_ships_l_<lang>.yml", QStringList());
+    modFilesTemplates.insert(outputPath + "/<lang>/STH_modifiers_l_<lang>.yml", QStringList());
+    modFilesTemplates.insert(outputPath + "/<lang>/STH_tech_l_<lang>.yml", QStringList());
+    modFilesTemplates.insert(outputPath + "/<lang>/STH_events_l_<lang>.yml", QStringList());
+    modFilesTemplates.insert(outputPath + "/<lang>/STH_synced_l_<lang>.yml", QStringList());
+    // Only STNH supported
     // Removed SGP mod type and its associated files
     // else if (modType == 3) {
     //     modName = "SGP";

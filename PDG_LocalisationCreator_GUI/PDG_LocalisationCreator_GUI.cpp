@@ -71,9 +71,7 @@ PDG_LocalisationCreator_GUI::~PDG_LocalisationCreator_GUI()
 void PDG_LocalisationCreator_GUI::on_unifiedRunButton_clicked()
 {
     int modType = 0;
-    if (ui->stnhRadioButton->isChecked()) modType = 1;
-    else if (ui->swfrRadioButton->isChecked()) modType = 2;
-    // Removed SGP option: else if (ui->sgpRadioButton->isChecked()) modType = 3; 
+    modType = 1; // Only STNH is available now
 
     // Get the paths from QLineEdit fields
     QString inputPath = ui->inputPathLineEdit->text();
@@ -89,7 +87,7 @@ void PDG_LocalisationCreator_GUI::on_unifiedRunButton_clicked()
     // Save paths automatically before starting the process
     savePathsToConfig();
 
-    if (modType > 0) {
+    if (modType == 1) {
         setUiEnabled(false);
         statusLabel->setText("Starting process...");
         ui->progressBar->setValue(0);
@@ -148,10 +146,7 @@ void PDG_LocalisationCreator_GUI::handleTaskFinished(bool success, const QString
 
     if (!isCleanupStep) { // If the creation task just finished
         if (success) {
-            int modType = 0; // Get selected mod type again for cleanup task
-            if (ui->stnhRadioButton->isChecked()) modType = 1;
-            else if (ui->swfrRadioButton->isChecked()) modType = 2;
-            // Removed SGP option: else if (ui->sgpRadioButton->isChecked()) modType = 3; 
+            int modType = 1; 
 
             // Get the paths from QLineEdit fields for cleanup task
             QString inputPath = ui->inputPathLineEdit->text();
@@ -220,7 +215,6 @@ void PDG_LocalisationCreator_GUI::writeToLogFile(const QString& message)
 // Enables or disables UI controls for mod selection and actions
 void PDG_LocalisationCreator_GUI::setUiEnabled(bool enabled)
 {
-    ui->modSelectionBox->setEnabled(enabled);
     ui->actionBox->setEnabled(enabled);
     ui->inputPathLineEdit->setEnabled(enabled);
     ui->inputPathButton->setEnabled(enabled);
