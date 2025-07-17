@@ -24,9 +24,8 @@ This tool helps PDG developers manage translation files by converting JSON input
 ## Features
 
 - **Mod-Specific Localisation Generation**  
-  Supports creating localisation files for:
+  Currently supports creating localisation files for:
   - STNH (Star Trek: New Horizons)
-  - SWFR (Star Wars: Fallen Republic)
 
 - **JSON to YML Conversion**  
   Converts `.json` input files into `.yml` format, suitable for game localisation.
