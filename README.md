@@ -50,7 +50,7 @@ The application operates in two main phases:
 
 ### 1. Localisation Creation
 
-- Reads JSON input files (e.g., `ST New Horizons - Main Localisation.json`)
+- Reads JSON input files (e.g., `Star Trek_ New Horizons - Main Localisation.json`)
 - Parses language-specific translation entries
 - Generates `.yml` files (e.g., `STH_main_l_english.yml`) organized by language
 - Clears the output directory before each run
@@ -61,7 +61,7 @@ The application operates in two main phases:
 - Loads all tags from newly created mod `.yml` files
 - Processes vanilla game `.yml` localisation files
 - Removes vanilla entries that duplicate mod entries
-- Copies essential vanilla folders (e.g., `name_lists`, `random_names`) into the output directory
+- Copies essential vanilla folders (e.g., `name_lists`, `random_names`) and `static_localisation` from the application's executable path into the output directory
 
 ---
 
@@ -111,13 +111,12 @@ After building, your executable (`.exe`) requires Qt's DLLs to run on other mach
 ### Usage
 
 1. **Run the application.**
-2. **Select Mod Type: Choose between "STNH" or "SWFR" using the radio buttons.**
-3. **Set Paths:**
+2. **Set Paths:**
    - **Input Path:** Select the directory containing your mod's JSON localisation files.
    - **Output Path:** Choose where the generated YML files and cleaned vanilla files will be saved.
    - **Vanilla Files Path:** Specify the root directory of the vanilla game's localisation files (e.g., `C:/Program Files (x86)/Steam/steamapps/common/Stellaris/localisation`).
-4. **Run:** Click the "ENGAGE" button.
-5. **Monitor Progress:** The status label and progress bar will update as the application processes files. Detailed logs will be written to a logs directory within the application's executable path.
+3. **Run:** Click the "ENGAGE" button.
+4. **Monitor Progress:** The status label and progress bar will update as the application processes files. Detailed logs will be written to a logs directory within the application's executable path.
 
 ## Logging
 
