@@ -5,6 +5,7 @@
 #include <QRegularExpression>
 #include <QFileInfo>
 #include <QDebug>
+#include <QCoreApplication>
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
@@ -88,22 +89,13 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
     QString modName = "STNH";
     emit logMessage("Selected STNH Localisation");
     filenames = {
-        { "ST New Horizons - Main Localisation.json", "STH_main_l_<lang>.yml" },
-        { "ST New Horizons - Ships Localisation.json", "STH_ships_l_<lang>.yml" },
-        { "ST New Horizons - Modifiers Localisation.json", "STH_modifiers_l_<lang>.yml" },
-        { "ST New Horizons - Events Localisation.json", "STH_events_l_<lang>.yml" },
-        { "ST New Horizons - Tech Localisation.json", "STH_tech_l_<lang>.yml" },
-        { "ST New Horizons - Synced Localisation.json", "STH_synced_l_<lang>.yml" }
+        { "Star Trek_ New Horizons - Main Localisation.json", "STH_main_l_<lang>.yml" },
+        { "Star Trek_ New Horizons - Ships Localisation.json", "STH_ships_l_<lang>.yml" },
+        { "Star Trek_ New Horizons - Modifiers Localisation.json", "STH_modifiers_l_<lang>.yml" },
+        { "Star Trek_ New Horizons - Events Localisation.json", "STH_events_l_<lang>.yml" },
+        { "Star Trek_ New Horizons - Tech Localisation.json", "STH_tech_l_<lang>.yml" },
+        { "Star Trek_ New Horizons - Synced Localisation.json", "STH_synced_l_<lang>.yml" }
     };
-    // Only STNH supported
-    // Removed SGP mod type and its associated files
-    // else if (modType == 3) {
-    //     modName = "SGP";
-    //     emit logMessage("Selected SGP Localisation");
-    //     filenames = {
-    //         { "SGP - Main Localisation.json", "SGP_main_l_<lang>.yml" },
-    //     };
-    // }
 
     emit statusMessage("Processing " + modName + " localisation files");
 
@@ -200,6 +192,17 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
     emit statusMessage("Starting localization cleanup and update");
     emit logMessage("Running cleanup process (writing cleaned vanilla to Output)...");
 
+    // The keys to be removed from vanilla files, hardcoded
+    std::unordered_set<std::string> keysToRemove = {
+        "DIFFICULTY_ADMIRAL",
+        "DIFFICULTY_CADET",
+        "DIFFICULTY_CAPTAIN",
+        "DIFFICULTY_CIVILIAN",
+        "DIFFICULTY_COMMODORE",
+        "DIFFICULTY_ENSIGN",
+        "DIFFICULTY_GRAND_ADMIRAL"
+    };
+
     // List of supported languages (Italian is skipped)
     std::vector<QString> languages = {
         "braz_por", "english", "french", "german", "polish", "russian",
@@ -217,13 +220,6 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
     modFilesTemplates.insert(outputPath + "/<lang>/STH_tech_l_<lang>.yml", QStringList());
     modFilesTemplates.insert(outputPath + "/<lang>/STH_events_l_<lang>.yml", QStringList());
     modFilesTemplates.insert(outputPath + "/<lang>/STH_synced_l_<lang>.yml", QStringList());
-    // Only STNH supported
-    // Removed SGP mod type and its associated files
-    // else if (modType == 3) {
-    //     modName = "SGP";
-    //     emit logMessage("Selected SGP Cleanup");
-    //     modFilesTemplates.insert(outputPath + "/<lang>/SGP_main_l_<lang>.yml", QStringList());
-    // }
 
     emit logMessage("DEBUG: modFilesTemplates size after initialization: " + QString::number(modFilesTemplates.size()) + " for modType " + QString::number(modType));
 
@@ -328,11 +324,12 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
 
                 if (std::regex_search(stdLine, matches, keyExp)) {
                     std::string tag = matches[1].str();
-                    if (usedTags.find(lang) == usedTags.end() || usedTags[lang].find(tag) == usedTags[lang].end()) {
-                        fileData.append(line);
+                    // Check if the tag is either a mod tag OR a hardcoded key to remove
+                    if ((usedTags.find(lang) != usedTags.end() && usedTags[lang].find(tag) != usedTags[lang].end()) || keysToRemove.count(tag) > 0) {
+                        fileChanged = true;
                     }
                     else {
-                        fileChanged = true;
+                        fileData.append(line);
                     }
                 }
                 else {
@@ -368,7 +365,7 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
     emit progressUpdated(90); // Ensure it's at 90% before copying name lists
 
     emit statusMessage("Copying name lists");
-    emit logMessage("\nCopying name_lists and random_names to Output folder...");
+    emit logMessage("Copying name_lists and random_names to Output folder...");
     // Copy name_lists and random_names folders for each language
     for (const auto& lang : languages) {
         QStringList subfoldersToCopy = { "name_lists", "random_names" };
@@ -394,6 +391,52 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
             }
         }
     }
+
+    // Copy content of "static_localisation" folder to the Output folder,
+    // ensuring files go into the correct language subdirectories.
+    emit statusMessage("Copying static localisation files");
+    emit logMessage("Copying files from 'static_localisation' into language subfolders in Output...");
+
+    // Get the base path for static localisation
+    QDir staticLocalisationBaseDir(QCoreApplication::applicationDirPath() + "/static_localisation");
+
+    // Iterate through each language folder in the static localisation directory
+    QStringList staticLangFolders = staticLocalisationBaseDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString& langFolder : staticLangFolders) {
+        QString sourceLangPath = staticLocalisationBaseDir.filePath(langFolder);
+        QDir sourceDir(sourceLangPath);
+
+        // Define the destination path for this language
+        QDir destDir(outputPath + "/" + langFolder);
+        if (!destDir.exists()) {
+            destDir.mkpath(".");
+        }
+
+        // Get the list of files to copy from the source language folder
+        QStringList filesToCopy = sourceDir.entryList(QDir::Files | QDir::NoDotAndDotDot);
+        for (const QString& file : filesToCopy) {
+            QString sourceFilePath = sourceDir.filePath(file);
+            QString destFilePath = destDir.filePath(file);
+
+            // Overwrite existing files
+            if (QFile::exists(destFilePath)) {
+                QFile::remove(destFilePath);
+            }
+
+            if (!QFile::copy(sourceFilePath, destFilePath)) {
+                emit logMessage("WARNING: Failed to copy " + sourceFilePath + " to " + destFilePath + " (Permissions issue).");
+                success = false;
+            }
+            else {
+                emit logMessage("Copied " + file + " to " + destDir.path() + ".");
+            }
+        }
+    }
+
+    if (staticLangFolders.isEmpty()) {
+        emit logMessage("INFO: 'static_localisation' folder is empty or not found. Skipping copy.");
+    }
+
     emit progressUpdated(100);
 
     if (success) {
