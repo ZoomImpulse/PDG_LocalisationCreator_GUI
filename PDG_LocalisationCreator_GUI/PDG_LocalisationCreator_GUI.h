@@ -41,7 +41,6 @@ private slots:
     void writeToLogFile(const QString& message);
 
     // New Slots for folder selection
-    void on_inputPathButton_clicked();
     void on_outputPathButton_clicked();
     void on_vanillaPathButton_clicked();
 

@@ -70,61 +70,51 @@ PDG_LocalisationCreator_GUI::~PDG_LocalisationCreator_GUI()
 // Slot: Handles the unified run button click, sets up log file, disables UI, and starts creation task
 void PDG_LocalisationCreator_GUI::on_unifiedRunButton_clicked()
 {
-    int modType = 0;
-    modType = 1; // Only STNH is available now
+    int modType = 1; // Only STNH is available now
 
     // Get the paths from QLineEdit fields
-    QString inputPath = ui->inputPathLineEdit->text();
     QString outputPath = ui->outputPathLineEdit->text();
     QString vanillaPath = ui->vanillaPathLineEdit->text();
 
     // Basic validation: Check if paths are set
-    if (inputPath.isEmpty() || outputPath.isEmpty() || vanillaPath.isEmpty()) {
-        QMessageBox::warning(this, "Missing Paths", "Please select all Input, Output, and Vanilla Files directories before running.");
+    if (outputPath.isEmpty() || vanillaPath.isEmpty()) {
+        QMessageBox::warning(this, "Missing Paths", "Please select all Output, and Vanilla Files directories before running.");
         return;
     }
 
     // Save paths automatically before starting the process
     savePathsToConfig();
 
-    if (modType == 1) {
-        setUiEnabled(false);
-        statusLabel->setText("Starting process...");
-        ui->progressBar->setValue(0);
+    setUiEnabled(false);
+    statusLabel->setText("Starting process...");
+    ui->progressBar->setValue(0);
 
-        // Setup logging for this run
-        QDateTime currentDateTime = QDateTime::currentDateTime();
-        currentLogFileName = "logs/log_" + currentDateTime.toString("yyyy-MM-dd_hh-mm-ss") + ".txt";
+    // Setup logging for this run
+    QDateTime currentDateTime = QDateTime::currentDateTime();
+    currentLogFileName = "logs/log_" + currentDateTime.toString("yyyy-MM-dd_hh-mm-ss") + ".txt";
 
-        // Ensure log directory exists
-        QDir logsDir("logs");
-        if (!logsDir.exists()) {
-            logsDir.mkpath("."); // Create "logs" directory
-        }
-
-        // Just write an initial message to ensure the file is created and accessible
-        // The writeToLogFile function will handle opening/closing.
-        writeToLogFile("--- Log Session Started: " + currentDateTime.toString(Qt::ISODate) + " ---");
-        writeToLogFile("DEBUG GUI: Log file system initialized and ready.");
-
-        // Write initial log entries
-        writeToLogFile("STARTING NEW LOCALISATION PROCESS");
-        writeToLogFile("Log file: " + currentLogFileName);
-        writeToLogFile("Selected Mod Type: " + QString::number(modType));
-        writeToLogFile("Input Path: " + inputPath);
-        writeToLogFile("Output Path: " + outputPath);
-        writeToLogFile("Vanilla Path: " + vanillaPath);
-        writeToLogFile("Timestamp: " + QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
-
-
-        statusLabel->setText("Starting creation task");
-        // Start the creation task in the worker thread, passing the paths
-        QMetaObject::invokeMethod(worker, "doCreateTask", Qt::QueuedConnection,
-            Q_ARG(int, modType),
-            Q_ARG(QString, inputPath),
-            Q_ARG(QString, outputPath),
-            Q_ARG(QString, vanillaPath));
+    // Ensure log directory exists
+    QDir logsDir("logs");
+    if (!logsDir.exists()) {
+        logsDir.mkpath(".");
     }
+
+    writeToLogFile("--- Log Session Started: " + currentDateTime.toString(Qt::ISODate) + " ---");
+    writeToLogFile("DEBUG GUI: Log file system initialized and ready.");
+    writeToLogFile("STARTING NEW LOCALISATION PROCESS");
+    writeToLogFile("Log file: " + currentLogFileName);
+    writeToLogFile("Selected Mod Type: " + QString::number(modType));
+    writeToLogFile("Output Path: " + outputPath);
+    writeToLogFile("Vanilla Path: " + vanillaPath);
+    writeToLogFile("Timestamp: " + QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
+
+    statusLabel->setText("Starting creation task");
+    // Start the creation task in the worker thread, passing the paths
+    QMetaObject::invokeMethod(worker, "doCreateTask", Qt::QueuedConnection,
+        Q_ARG(int, modType),
+        Q_ARG(QString, ""), // Input path is no longer needed, pass an empty string
+        Q_ARG(QString, outputPath),
+        Q_ARG(QString, vanillaPath));
 }
 
 // Slot: Updates the progress bar value
@@ -146,10 +136,10 @@ void PDG_LocalisationCreator_GUI::handleTaskFinished(bool success, const QString
 
     if (!isCleanupStep) { // If the creation task just finished
         if (success) {
-            int modType = 1; 
+            int modType = 1;
 
             // Get the paths from QLineEdit fields for cleanup task
-            QString inputPath = ui->inputPathLineEdit->text();
+            QString inputPath = ""; // Input path is no longer needed
             QString outputPath = ui->outputPathLineEdit->text();
             QString vanillaPath = ui->vanillaPathLineEdit->text();
 
@@ -216,8 +206,6 @@ void PDG_LocalisationCreator_GUI::writeToLogFile(const QString& message)
 void PDG_LocalisationCreator_GUI::setUiEnabled(bool enabled)
 {
     ui->actionBox->setEnabled(enabled);
-    ui->inputPathLineEdit->setEnabled(enabled);
-    ui->inputPathButton->setEnabled(enabled);
     ui->outputPathLineEdit->setEnabled(enabled);
     ui->outputPathButton->setEnabled(enabled);
     ui->vanillaPathLineEdit->setEnabled(enabled);
@@ -266,16 +254,6 @@ void PDG_LocalisationCreator_GUI::cleanOldLogs()
     qDebug() << "Log cleanup finished.";
 }
 
-// New Slot: Handle Input Path selection
-void PDG_LocalisationCreator_GUI::on_inputPathButton_clicked()
-{
-    QString dir = QFileDialog::getExistingDirectory(this, "Select Input Directory", ui->inputPathLineEdit->text());
-    if (!dir.isEmpty()) {
-        ui->inputPathLineEdit->setText(QDir::toNativeSeparators(dir));
-
-    }
-}
-
 // New Slot: Handle Output Path selection
 void PDG_LocalisationCreator_GUI::on_outputPathButton_clicked()
 {
@@ -297,7 +275,6 @@ void PDG_LocalisationCreator_GUI::on_vanillaPathButton_clicked()
 // New: Load paths from config file and update UI
 void PDG_LocalisationCreator_GUI::loadPathsFromConfig()
 {
-    ui->inputPathLineEdit->setText(configManager->loadSetting("Paths/InputPath", "").toString());
     ui->outputPathLineEdit->setText(configManager->loadSetting("Paths/OutputPath", "").toString());
     ui->vanillaPathLineEdit->setText(configManager->loadSetting("Paths/VanillaPath", "").toString());
 }
@@ -305,7 +282,6 @@ void PDG_LocalisationCreator_GUI::loadPathsFromConfig()
 // New: Saves current paths from UI to config file
 void PDG_LocalisationCreator_GUI::savePathsToConfig()
 {
-    configManager->saveSetting("Paths/InputPath", ui->inputPathLineEdit->text());
     configManager->saveSetting("Paths/OutputPath", ui->outputPathLineEdit->text());
     configManager->saveSetting("Paths/VanillaPath", ui->vanillaPathLineEdit->text());
     qDebug() << "Saved configuration paths.";

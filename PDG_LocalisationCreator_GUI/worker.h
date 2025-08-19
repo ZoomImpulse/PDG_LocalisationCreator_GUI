@@ -6,6 +6,7 @@
 #include <QMap>
 #include <QMutex>
 #include <QWaitCondition>
+#include <QNetworkAccessManager>
 
 // Worker class handles background localisation creation and cleanup tasks in a separate thread.
 class Worker : public QObject
@@ -41,4 +42,5 @@ private:
     bool m_outputFolderClearConfirmed; // Flag to confirm output folder was cleared (not used in current logic).
     QMutex m_mutex;                    // Mutex for thread safety (reserved for future use).
     QWaitCondition m_condition;        // Wait condition for thread synchronization (reserved for future use).
+    QNetworkAccessManager* networkManager;
 };
