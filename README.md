@@ -99,7 +99,7 @@ cd PDG-Localisation-Creator
 3. Run qmake
 4. Build the project
 
-#### 3. Building with Visual Studio
+#### OR Building with Visual Studio
 
 1. Open the `.sln` file (or generate one using `qmake -tp vc`)
 2. Choose configuration (`Debug`/`Release`) and platform (e.g., `x64`)
