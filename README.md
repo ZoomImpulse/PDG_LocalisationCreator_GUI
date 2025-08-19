@@ -105,7 +105,7 @@ cd PDG-Localisation-Creator
 2. Choose configuration (`Debug`/`Release`) and platform (e.g., `x64`)
 3. Build the solution
 
-#### 4. Deploying Necessary DLLs (only needed initially)
+#### 3. Deploying Necessary DLLs (only needed initially)
 After building, your executable (`.exe`) requires Qt's DLLs to run on other machines. Use Qt's `windeployqt` tool for this:
 
 1. **Navigate to your build output directory** in the command prompt or terminal. This is usually where your `.exe` file is located.
