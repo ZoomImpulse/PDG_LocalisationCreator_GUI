@@ -131,7 +131,7 @@ After building, your executable (`.exe`) requires Qt's DLLs to run on other mach
 The application generates timestamped log files in a `logs directory` (e.g., `logs/log_2023-10-27_14-30-00.txt`). These logs provide detailed information about the processing steps, warnings, and errors. Old log files (from previous days) are automatically cleaned up on startup.
 
 ## Credits
-This project is an evolution of the work originally done by Oninoni in the [PDG_Utilities](https://github.com/oninoni/PDG_Utilities) repository. 
+This project is an evolution of the work originally done by Possseidon and Oninoni in the [PDG_Utilities](https://github.com/oninoni/PDG_Utilities) repository. 
 
 **Many thanks to Oninoni for the foundation!**
 
