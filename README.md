@@ -1,9 +1,9 @@
 # PDG Localisation Creator GUI
 
-A **Qt-based desktop application** designed to streamline the creation and cleanup of localisation files for Stellaris mods made by PDG.  
-This tool helps PDG developers manage translation files by converting JSON input into a game-compatible YML format and cleaning up vanilla localisation files based on existing mod entries.
+A **Qt-based desktop application** designed to automate the creation and cleanup of localisation files for Stellaris mods made by PDG. This tool streamlines the translation workflow by fetching the latest data directly from Google Sheets via an API, converting it into a game-compatible YML format, and cleaning up vanilla localisation files based on existing mod entries.
 
-<img width="492" height="292" alt="grafik" src="https://github.com/user-attachments/assets/21ca59c8-4b28-4516-97c9-efe536e3aa7c" />
+<img width="492" height="292" alt="grafik" src="https://github.com/user-attachments/assets/1acb89e6-9531-4dca-8e99-864bbfac558d" />
+
 
 ---
 
@@ -23,24 +23,29 @@ This tool helps PDG developers manage translation files by converting JSON input
 
 ## Features
 
-- **Mod-Specific Localisation Generation**  
-  Currently supports creating localisation files for:
-  - STNH (Star Trek: New Horizons)
+- **Direct Google Sheets Integration**  
+  Fetches localisation data directly from Google Sheets via a [Google Apps Script API](https://github.com/ZoomImpulse/PDG_ExportSheetData), eliminating the need for manual JSON exports.
 
-- **JSON to YML Conversion**  
-  Converts `.json` input files into `.yml` format, suitable for game localisation.
+- **Parallel Asynchronous Processing**  
+  All API requests are launched concurrently, significantly speeding up the data fetching process.
+
+- **Robust API Error Handling**  
+  Features an automatic retry mechanism with exponential backoff. If a network request fails, the tool will try again several times with increasing delays, making it resilient to temporary server issues.
+
+- **Advanced String Normalization**  
+  Automatically cleans and normalizes strings from the API, removing unwanted line breaks while correctly preserving intentional newline characters (`\n`).
 
 - **Vanilla File Cleanup**  
-  Cleans vanilla game localisation files by removing entries already present in your mod's files.
+  Scans vanilla game localisation files and removes any entries that are already defined in your mod's files, preventing overrides and reducing file size.
 
-- **Multi-threaded Operations**  
-  Uses a separate worker thread for file processing to keep the UI responsive.
+- **Multi-threaded & Responsive UI**  
+  All file and network operations run on a separate worker thread, ensuring the user interface remains responsive at all times.
 
-- **Progress Tracking & Logging**  
-  Progress bar and detailed timestamped logs for monitoring and debugging.
+- **Detailed Progress Tracking**  
+  A dynamic status bar shows the real-time status of operations (Fetching, Processing, Completed) and a progress bar tracks overall completion.
 
-- **Intuitive GUI**  
-  Simple interface for selecting mod types, paths, and initiating processes.
+- **Comprehensive Logging**  
+  Generates detailed, timestamped log files for easy monitoring and debugging of all operations.
 
 ---
 
@@ -50,18 +55,21 @@ The application operates in two main phases:
 
 ### 1. Localisation Creation
 
-- Reads JSON input files (e.g., `Star Trek_ New Horizons - Main Localisation.json`)
-- Parses language-specific translation entries
-- Generates `.yml` files (e.g., `STH_main_l_english.yml`) organized by language
-- Clears the output directory before each run
+- Connects to a Google Apps Script web app URL.
+- Sends API requests for all defined localisation categories (Main, Ships, Tech, etc.) **in parallel**.
+- If a request fails due to a network error (e.g., "Internal Server Error"), it will **automatically retry** up to 3 times with an increasing delay.
+- Parses the JSON response from the API.
+- Cleans and normalizes each translation string to handle whitespace and newlines correctly.
+- Generates sorted, game-ready `.yml` files (e.g., `STH_main_l_english.yml`) organized into language-specific folders.
+- The output directory is cleared before each run to ensure a clean build.
 
 ### 2. Localisation Cleanup & Update
 
-- Triggered automatically after successful creation
-- Loads all tags from newly created mod `.yml` files
-- Processes vanilla game `.yml` localisation files
-- Removes vanilla entries that duplicate mod entries
-- Copies essential vanilla folders (e.g., `name_lists`, `random_names`) and `static_localisation` from the application's executable path into the output directory
+- First, it scans all the mod's `.yml` files in the **Output Path** to create a master list of existing localisation tags for each language.
+- It then processes all vanilla game `.yml` files from the specified **Vanilla Files Path**.
+- It removes any lines from the vanilla files that contain a tag already present in the mod's files or in a predefined removal list.
+- The cleaned vanilla files are written to the **Output Path**, organized by language.
+- Finally, it copies essential vanilla folders (`name_lists`, `random_names`) and any custom files from a local `static_localisation` folder (located in the executables path) into the output directory.
 
 ---
 
@@ -69,8 +77,9 @@ The application operates in two main phases:
 
 ### Prerequisites
 
-- Qt 5 or newer (with `QtWidgets`, `QtCore`, `QSettings`, etc.)
-- A C++ compiler (MSVC, MinGW, or GCC)
+- Qt 5 or newer (Qt 6 is also compatible).
+    - Required modules: `QtWidgets`, `QtCore`, `QtNetwork`.
+- A C++17 compatible compiler (MSVC, MinGW, or GCC).
 
 ---
 
@@ -112,20 +121,19 @@ After building, your executable (`.exe`) requires Qt's DLLs to run on other mach
 
 1. **Run the application.**
 2. **Set Paths:**
-   - **Input Path:** Select the directory containing your mod's JSON localisation files.
    - **Output Path:** Choose where the generated YML files and cleaned vanilla files will be saved.
    - **Vanilla Files Path:** Specify the root directory of the vanilla game's localisation files (e.g., `C:/Program Files (x86)/Steam/steamapps/common/Stellaris/localisation`).
 3. **Run:** Click the "ENGAGE" button.
-4. **Monitor Progress:** The status label and progress bar will update as the application processes files. Detailed logs will be written to a logs directory within the application's executable path.
+4. **Monitor Progress:** The status label provides a detailed breakdown of the current operations, and the progress bar tracks the overall task. Detailed logs are written to the `logs` directory.
 
 ## Logging
 
-The application generates timestamped log files in a `logs directory (e.g., `logs/log_2023-10-27_14-30-00.txt`). These logs provide detailed information about the processing steps, warnings, and errors. Old log files (from previous days) are automatically cleaned up on startup.
+The application generates timestamped log files in a `logs directory` (e.g., `logs/log_2023-10-27_14-30-00.txt`). These logs provide detailed information about the processing steps, warnings, and errors. Old log files (from previous days) are automatically cleaned up on startup.
 
 ## Credits
-This project is based on the work of https://github.com/oninoni/PDG_Utilities. 
+This project is an evolution of the work originally done by Oninoni in the [PDG_Utilities](https://github.com/oninoni/PDG_Utilities) repository. 
 
-**Credits to Oninoni!**
+**Many thanks to Oninoni for the foundation!**
 
 ## Contact
 
