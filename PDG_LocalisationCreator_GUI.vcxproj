@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -37,7 +37,7 @@
   </ImportGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="QtSettings">
     <QtInstall>6.9.1_msvc2022_64</QtInstall>
-    <QtModules>core;gui;widgets</QtModules>
+    <QtModules>core;gui;network;widgets</QtModules>
     <QtBuildConfig>debug</QtBuildConfig>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="QtSettings">
@@ -93,10 +93,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ConfigManager.cpp" />
+    <ClCompile Include="SheetsSelectionDialog.cpp" />
+    <ClCompile Include="ProgressOverlay.cpp" />
     <ClCompile Include="worker.cpp" />
     <QtRcc Include="PDG_LocalisationCreator_GUI.qrc" />
     <QtUic Include="PDG_LocalisationCreator_GUI.ui" />
     <QtMoc Include="PDG_LocalisationCreator_GUI.h" />
+    <QtMoc Include="ProgressOverlay.h" />
     <ClCompile Include="PDG_LocalisationCreator_GUI.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
@@ -105,6 +108,7 @@
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="ConfigManager.h" />
+    <QtMoc Include="SheetsSelectionDialog.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

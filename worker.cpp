@@ -23,6 +23,7 @@
 #include <QTimer>
 #include <functional>
 #include <cmath>
+#include <QElapsedTimer>
 
 
 // A struct to hold the API call data for each file.
@@ -35,21 +36,34 @@ struct ApiData {
 // Constructor for Worker class
 Worker::Worker(QObject* parent) : QObject(parent), networkManager(new QNetworkAccessManager(this)) {}
 
+// Request cooperative cancellation (abort in-flight network replies)
+void Worker::requestCancel()
+{
+    m_cancelRequested.store(true);
+    QMutexLocker locker(&m_mutex);
+    for (QNetworkReply* r : m_activeReplies) {
+        if (r) r->abort();
+    }
+}
+
 // Slot to start the creation process for a given mod type
 void Worker::doCreateTask(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath)
 {
+    m_cancelRequested.store(false);
     runCreateProcess(modType, inputPath, outputPath, vanillaPath);
 }
 
 // Slot to start the cleanup process for a given mod type
 void Worker::doCleanupTask(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath)
 {
+    m_cancelRequested.store(false);
     runCleanupProcess(modType, inputPath, outputPath, vanillaPath);
 }
 
 // Main logic for creating localisation files based on modType
 void Worker::runCreateProcess(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath)
 {
+    QElapsedTimer totalTimerCreate; totalTimerCreate.start();
     emit progressUpdated(0);
     emit statusMessage("Starting localisation creation...");
 
@@ -58,7 +72,7 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
     const int BASE_RETRY_DELAY_MS = 1000; // Start with a 1-second delay
 
     // Clear Output folder before starting
-    emit logMessage("Clearing contents of Output folder: " + outputPath);
+    emit logMessage("INFO: Clearing contents of Output folder: " + outputPath);
     QDir outputDir(outputPath);
     if (!outputDir.exists()) {
         if (!outputDir.mkpath(".")) {
@@ -69,12 +83,18 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
     }
     outputDir.removeRecursively();
     outputDir.mkpath(".");
-    emit logMessage(outputPath + " folder contents cleared.");
+    emit logMessage("INFO: " + outputPath + " folder contents cleared.");
+
+    // Progress calibration across phases
+    const int PREP_PROGRESS = 5;          // after setup
+    const int API_PROGRESS_RANGE = 90;    // main API work spans 5..95
+    const int FINALIZE_PROGRESS = 100;    // final step sets to 100
+    emit progressUpdated(PREP_PROGRESS);
 
     // Prepare file name mappings for each mod type
     std::vector<std::pair<QString, QString>> filenames;
     QString modName = "STNH";
-    emit logMessage("Selected STNH Localisation");
+    emit logMessage("INFO: Selected STNH Localisation");
     filenames = {
         { "Main Localisation", "STH_main_l_<lang>.yml" },
         { "Ships Localisation", "STH_ships_l_<lang>.yml" },
@@ -84,44 +104,98 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
         { "Synced Localisation", "STH_synced_l_<lang>.yml" }
     };
 
-    // Map filenames to their corresponding API data
+    // Map filenames to their corresponding API data (targetSheets intentionally left empty; must be provided by user selection)
     QMap<QString, ApiData> apiMappings;
     apiMappings["Main Localisation"] = {
         "https://script.google.com/macros/s/AKfycbzAfQroJ3X4vCkn3NCwDy4WqRdgQs_lLpZ-QmOMsUQZ_lo_Lu8ddnbgoaiiGN6U3Nxk_w/exec",
         "1jQOrWJpAF_9TQVyrrOfxinyTTxvoDJg_E7BHUNEkoio",
-        QJsonArray({83571973, 136902998, 329681197, 344846995, 459228252, 491211430, 671222437, 833441231, 962771099, 1302479661, 1329871994, 1435222409, 1444412922, 1485308419, 1487353902, 1711119669, 1846746232, 1947435442, 1981406910, 2031398540})
+        QJsonArray()
     };
     apiMappings["Ships Localisation"] = {
         "https://script.google.com/macros/s/AKfycbzAfQroJ3X4vCkn3NCwDy4WqRdgQs_lLpZ-QmOMsUQZ_lo_Lu8ddnbgoaiiGN6U3Nxk_w/exec",
         "19z068O5ARdrXLyswqTeDqcQdhAwA39kI8Gx_nhZPL3I",
-        QJsonArray({392244419,932592689,1151223207,1410646937,1933627270, 1937160235,2001315937,2003155773})
+        QJsonArray()
     };
     apiMappings["Modifiers Localisation"] = {
         "https://script.google.com/macros/s/AKfycbzAfQroJ3X4vCkn3NCwDy4WqRdgQs_lLpZ-QmOMsUQZ_lo_Lu8ddnbgoaiiGN6U3Nxk_w/exec",
         "1TZylnt8An15CLYlQmy1tjUYvHgMQoosh_x1jC35HOck",
-        QJsonArray({12059612,217543803,451677996,874386308,1083916510, 1142139456,1294141213,1625849031,1792340026,1878062444})
+        QJsonArray()
     };
     apiMappings["Events Localisation"] = {
         "https://script.google.com/macros/s/AKfycbzAfQroJ3X4vCkn3NCwDy4WqRdgQs_lLpZ-QmOMsUQZ_lo_Lu8ddnbgoaiiGN6U3Nxk_w/exec",
         "1YNdrUt0Ro1w6aiVZR0uSJnnulpzhh4thvy3K1-fJ_qA",
-        QJsonArray({154369650,165229678,382025639,430653874,579345446, 587908368,765807036,1054822697,1127044865,1743990087,1758953694, 1781767846,2102085493,2102463089})
+        QJsonArray()
     };
     apiMappings["Tech Localisation"] = {
         "https://script.google.com/macros/s/AKfycbzAfQroJ3X4vCkn3NCwDy4WqRdgQs_lLpZ-QmOMsUQZ_lo_Lu8ddnbgoaiiGN6U3Nxk_w/exec",
         "15QcA1M4dX455UYD2GEv3tDJ3P4z3jhK7p5qPMTDFS60",
-        QJsonArray({64606495,420715848,525230256,576741004,599811558})
+        QJsonArray()
     };
     apiMappings["Synced Localisation"] = {
         "https://script.google.com/macros/s/AKfycbzAfQroJ3X4vCkn3NCwDy4WqRdgQs_lLpZ-QmOMsUQZ_lo_Lu8ddnbgoaiiGN6U3Nxk_w/exec",
         "1MgcmiOr8OMqD6qo5EMwk3ymVenSqAS8MWdo33hKjIPk",
-        QJsonArray({747046962,797234541,1545834876,1684242216,2022805766})
+        QJsonArray()
     };
+
+    // Require user-provided selections; error out if none
+    if (m_selectionsJson.trimmed().isEmpty()) {
+        emit statusMessage("No sheets selected. Please open 'Select Sheets' and choose at least one.");
+        emit taskFinished(false, "No sheets selected.");
+        return;
+    }
+
+    QJsonDocument selDoc = QJsonDocument::fromJson(m_selectionsJson.toUtf8());
+    if (!selDoc.isObject()) {
+        emit statusMessage("Invalid selections data. Please reselect sheets.");
+        emit taskFinished(false, "Invalid selections JSON.");
+        return;
+    }
+    {
+        QJsonObject selObj = selDoc.object();
+        for (auto it = selObj.begin(); it != selObj.end(); ++it) {
+            if (!it.value().isArray()) continue;
+            const QString category = it.key();
+            if (apiMappings.contains(category)) {
+                QJsonArray ids = it.value().toArray();
+                if (!ids.isEmpty()) {
+                    apiMappings[category].targetSheets = ids;
+                }
+            }
+        }
+    }
+    // Log selection summary
+    {
+        QStringList catSummaries;
+        for (auto it = apiMappings.begin(); it != apiMappings.end(); ++it) {
+            QStringList idStrs;
+            for (const auto& v : it->targetSheets) idStrs << v.toVariant().toString();
+            if (!idStrs.isEmpty()) {
+                catSummaries << (it.key() + ": [" + idStrs.join(", ") + "]");
+            }
+        }
+        if (!catSummaries.isEmpty()) {
+            emit logMessage("INFO: Selected sheets — " + catSummaries.join(", "));
+        }
+    }
+    // Validate that at least one category has target sheets
+    bool anySelected = false;
+    for (auto it = apiMappings.begin(); it != apiMappings.end(); ++it) {
+        if (!it->targetSheets.isEmpty()) { anySelected = true; break; }
+    }
+    if (!anySelected) {
+        emit statusMessage("No sheets selected for any category. Please choose at least one sheet.");
+        emit taskFinished(false, "No target sheets selected.");
+        return;
+    }
 
     // --- ASYNCHRONOUS LOGIC ---
 
-    int* activeRequests = new int(filenames.size());
+    int* activeRequests = new int(static_cast<int>(filenames.size()));
     bool* overallSuccess = new bool(true);
     QMap<QString, QString>* fileStatus = new QMap<QString, QString>();
+    int* totalRetries = new int(0);
+    int* totalFilesSucceeded = new int(0);
+    int* totalFilesFailed = new int(0);
 
     auto updateStatusMessage = [this, fileStatus]() {
         QMap<QString, int> statusCounts;
@@ -130,43 +204,53 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
         }
         int fetchingCount = statusCounts.value("Fetching", 0);
         int processingCount = statusCounts.value("Processing", 0);
-        int completedCount = statusCounts.value("Completed", 0);
-        int failedCount = statusCounts.value("Failed", 0);
-        int totalCount = fileStatus->size();
-        QString status = QString("Fetching: %1 | Processing: %2 | Completed: %3/%4")
-            .arg(fetchingCount)
-            .arg(processingCount)
-            .arg(completedCount + failedCount)
-            .arg(totalCount);
-        if (failedCount > 0) {
-            status += QString(" | Failed: %1").arg(failedCount);
+        // Simplified header text per request
+        if (fetchingCount > 0 || processingCount > 0) {
+            emit statusMessage("Fetching and processing data...");
         }
-        emit statusMessage(status);
+        emit fetchActive(fetchingCount > 0);
+        emit processActive(processingCount > 0);
         };
 
     auto finalizeRequest = [=]() {
         (*activeRequests)--;
-        emit progressUpdated(100 * (filenames.size() - *activeRequests) / filenames.size());
+        int completed = (int)filenames.size() - *activeRequests;
+        int scaled = PREP_PROGRESS + (completed * API_PROGRESS_RANGE) / (int)filenames.size();
+        if (scaled > 95) scaled = 95; // cap before finalization
+        emit progressUpdated(scaled);
 
         if (*activeRequests == 0) {
-            emit logMessage("\nAll API requests have been processed.");
-            if (*overallSuccess) {
+            emit logMessage("INFO: All API requests have been processed.");
+            if (m_cancelRequested.load()) {
+                emit statusMessage("Cancelled by user.");
+                emit taskFinished(false, "Operation cancelled.");
+            }
+            else if (*overallSuccess) {
                 emit statusMessage("Task finished successfully!");
+                emit progressUpdated(FINALIZE_PROGRESS);
                 emit taskFinished(true, "Localisation files created successfully!");
             }
             else {
                 emit statusMessage("Task finished with errors.");
+                emit progressUpdated(FINALIZE_PROGRESS);
                 emit taskFinished(false, "Localisation creation finished with some errors.");
             }
+            emit logMessage(QString("SUMMARY: Create process duration: %1 ms; files ok: %2, failed: %3, retries: %4")
+                .arg(totalTimerCreate.elapsed()).arg(*totalFilesSucceeded).arg(*totalFilesFailed).arg(*totalRetries));
             delete activeRequests;
             delete overallSuccess;
             delete fileStatus;
+            delete totalRetries;
+            delete totalFilesSucceeded;
+            delete totalFilesFailed;
         }
         };
 
     std::function<void(const std::pair<QString, QString>&, const ApiData&, int)> performApiRequest;
     performApiRequest = [=, &performApiRequest](const std::pair<QString, QString>& filePair, const ApiData& apiData, int attemptNum) {
         const QString& currentFileName = filePair.first;
+        QElapsedTimer* requestTimer = new QElapsedTimer();
+        requestTimer->start();
 
         QJsonObject jsonSettings;
         jsonSettings["exportType"] = "jsonFormat";
@@ -212,6 +296,10 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
         url.setQuery(urlQuery);
         QNetworkRequest request(url);
         QNetworkReply* reply = networkManager->get(request);
+        {
+            QMutexLocker locker(&m_mutex);
+            m_activeReplies.append(reply);
+        }
 
         connect(reply, &QNetworkReply::finished, this, [=]() {
             bool requestHandled = false;
@@ -219,7 +307,7 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
             if (reply->error() == QNetworkReply::NoError) {
                 (*fileStatus)[currentFileName] = "Processing";
                 updateStatusMessage();
-                emit logMessage("<- Received response for: " + currentFileName);
+                emit logMessage("INFO: Received response for: " + currentFileName);
 
                 QByteArray responseData = reply->readAll();
                 QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
@@ -256,7 +344,9 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
                             }
                         }
                     }
-
+                    if (translations.empty()) {
+                        emit logMessage("WARNING: No translations received for " + currentFileName);
+                    }
                     for (const auto& entry : translations) {
                         QString language = QString::fromStdString(entry.first);
                         if (language.toLower() == "italian") continue;
@@ -278,10 +368,13 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
                         out << "l_" << langLower << ":\n";
                         std::vector<std::string> sortedLines = entry.second;
                         std::sort(sortedLines.begin(), sortedLines.end());
+                        int entriesWrittenThisLang = 0;
                         for (const auto& line : sortedLines) {
                             out << " " << QString::fromStdString(line) << "\n";
+                            entriesWrittenThisLang++;
                         }
                         outputFile.close();
+                        emit logMessage(QString("INFO: Wrote %1 entries to %2").arg(entriesWrittenThisLang).arg(fullOutputPath));
                     }
                 }
                 else {
@@ -291,11 +384,13 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
 
                 if (successThisRequest) {
                     (*fileStatus)[currentFileName] = "Completed";
-                    emit logMessage("Successfully processed " + currentFileName);
+                    emit logMessage("INFO: Successfully processed " + currentFileName);
+                    (*totalFilesSucceeded)++;
                 }
                 else {
                     (*fileStatus)[currentFileName] = "Failed";
                     *overallSuccess = false;
+                    (*totalFilesFailed)++;
                 }
                 requestHandled = true;
             }
@@ -303,21 +398,32 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
                 emit logMessage(QString("ERROR: Network request failed for %1 (Attempt %2/%3): %4")
                     .arg(currentFileName).arg(attemptNum + 1).arg(MAX_RETRIES + 1).arg(reply->errorString()));
 
-                if (attemptNum < MAX_RETRIES) {
+                if (!m_cancelRequested.load() && attemptNum < MAX_RETRIES) {
                     int delay = BASE_RETRY_DELAY_MS * static_cast<int>(std::pow(2, attemptNum));
-                    emit logMessage(QString("-> Retrying in %1ms...").arg(delay));
+                    emit logMessage(QString("INFO: Retrying in %1ms...").arg(delay));
                     QTimer::singleShot(delay, this, [=]() {
+                        (*totalRetries)++;
                         performApiRequest(filePair, apiData, attemptNum + 1);
                         });
                 }
                 else {
-                    emit logMessage(QString("-> Maximum retries reached for %1. This file has failed.").arg(currentFileName));
+                    if (m_cancelRequested.load()) {
+                        emit logMessage(QString("INFO: Cancellation active, not retrying %1.").arg(currentFileName));
+                    } else {
+                        emit logMessage(QString("WARNING: Maximum retries reached for %1. This file has failed.").arg(currentFileName));
+                    }
                     (*fileStatus)[currentFileName] = "Failed";
                     *overallSuccess = false;
                     requestHandled = true;
                 }
             }
 
+            {
+                QMutexLocker locker(&m_mutex);
+                m_activeReplies.removeAll(reply);
+            }
+            emit logMessage(QString("DEBUG: API request for '%1' took %2 ms").arg(currentFileName).arg(requestTimer->elapsed()));
+            delete requestTimer;
             reply->deleteLater();
             updateStatusMessage();
             if (requestHandled) {
@@ -329,7 +435,7 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
     // 1. LAUNCH ALL API REQUESTS CONCURRENTLY (Initial call)
     for (const auto& filePair : filenames) {
         const QString& currentFileName = filePair.first;
-        emit logMessage("-> Starting API request for: " + currentFileName);
+        emit logMessage("INFO: Starting API request for: " + currentFileName);
 
         if (!apiMappings.contains(currentFileName)) {
             emit logMessage("ERROR: No API mapping found for file: " + currentFileName);
@@ -339,6 +445,12 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
             continue;
         }
 
+        if (m_cancelRequested.load()) {
+            (*fileStatus)[currentFileName] = "Failed";
+            *overallSuccess = false;
+            finalizeRequest();
+            continue;
+        }
         (*fileStatus)[currentFileName] = "Fetching";
         const ApiData& apiData = apiMappings.value(currentFileName);
 
@@ -350,9 +462,11 @@ void Worker::runCreateProcess(int modType, const QString& inputPath, const QStri
 // Main logic for cleaning up and updating localisation files based on modType
 void Worker::runCleanupProcess(int modType, const QString& inputPath, const QString& outputPath, const QString& vanillaPath)
 {
+    QElapsedTimer totalTimerCleanup; totalTimerCleanup.start();
     emit progressUpdated(0);
     emit statusMessage("Starting localization cleanup and update");
-    emit logMessage("Running cleanup process (writing cleaned vanilla to Output)...");
+    emit logMessage("INFO: Running cleanup process (writing cleaned vanilla to Output)...");
+    // Log of cleanup config will be printed after languages are defined
 
     // The keys to be removed from vanilla files, hardcoded
     std::unordered_set<std::string> keysToRemove = {
@@ -372,10 +486,12 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
         "spanish"
     };
 
+    emit logMessage("INFO: Cleanup config — vanilla=" + vanillaPath + ", output=" + outputPath + ", langs=" + QString::number(static_cast<int>(languages.size())));
+
     // Define the file templates based on modType - used only for First Pass (loading mod tags)
     QMap<QString, QStringList> modFilesTemplates;
     QString modName = "STNH";
-    emit logMessage("Selected STNH Cleanup");
+    emit logMessage("INFO: Selected STNH Cleanup");
     modFilesTemplates.insert(outputPath + "/<lang>/STH_main_l_<lang>.yml", QStringList());
     modFilesTemplates.insert(outputPath + "/<lang>/STH_ships_l_<lang>.yml", QStringList());
     modFilesTemplates.insert(outputPath + "/<lang>/STH_modifiers_l_<lang>.yml", QStringList());
@@ -391,15 +507,20 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
 
     std::unordered_map<QString, std::unordered_set<std::string>> usedTags;
 
-    emit statusMessage("Loading existing localization tags from mod output files...");
-    emit logMessage("Loading tags from mod output files for cleanup...");
+    emit statusMessage("Loading existing keys from output files for cleanup...");
+    emit logMessage("INFO: Loading existing keys from output files for cleanup...");
 
     // First pass: Load existing localization tags from the mod's output files
     // Calculate progress for this section
     int currentProgress = 0;
-    int progressPerLanguage = (modFilesTemplates.keys().size() > 0) ? (20 / languages.size()) : 0; // Allocate 20% for this phase
+    int progressPerLanguage = (modFilesTemplates.keys().size() > 0) ? (20 / static_cast<int>(languages.size())) : 0; // Allocate 20% for this phase
 
     for (const auto& lang : languages) {
+        if (m_cancelRequested.load()) {
+            emit statusMessage("Cancelling…");
+            emit taskFinished(false, "Operation cancelled.");
+            return;
+        }
         QString langLower = lang.toLower();
         int tagsLoadedForLang = 0;
         for (const QString& outputPathTemplate : modFilesTemplates.keys()) {
@@ -440,12 +561,14 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
 
     // Second pass: Process ALL vanilla files and write cleaned versions to the Output folder
     bool success = true;
-    int progressPerVanillaFile = (languages.size() * modFilesTemplates.keys().size() > 0) ? (70 / (languages.size() * modFilesTemplates.keys().size())) : 0; // Allocate 70% for this phase (20-90)
+    long long totalKeysRemoved = 0;
+    int progressPerVanillaFile = (static_cast<int>(languages.size()) * modFilesTemplates.keys().size() > 0) ? (70 / (static_cast<int>(languages.size()) * modFilesTemplates.keys().size())) : 0; // Allocate 70% for this phase (20-90)
     int filesProcessed = 0;
 
     for (const auto& lang : languages) {
+        QElapsedTimer langTimer; langTimer.start();
         if (lang.toLower() == "italian") {
-            emit logMessage("Skipping Italian language for cleanup.");
+            emit logMessage("INFO: Skipping Italian language for cleanup.");
             continue;
         }
 
@@ -463,7 +586,14 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
 
         QStringList vanillaFiles = vanillaLangDir.entryList(QStringList() << "*.yml", QDir::Files, QDir::Name);
 
+        int filesProcessedForLang = 0;
+        long long keysRemovedForLang = 0;
         for (const QString& vanillaFileName : vanillaFiles) {
+            if (m_cancelRequested.load()) {
+                emit statusMessage("Cancelling…");
+                emit taskFinished(false, "Operation cancelled.");
+                return;
+            }
             if (vanillaFileName.startsWith("name_lists_") || vanillaFileName.startsWith("random_names_")) {
                 continue;
             }
@@ -479,6 +609,7 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
             QTextStream inVanilla(&vanillaFile);
             QStringList fileData;
             bool fileChanged = false;
+            int removedInThisFile = 0;
 
             while (!inVanilla.atEnd()) {
                 QString line = inVanilla.readLine();
@@ -489,6 +620,7 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
                     // Check if the tag is either a mod tag OR a hardcoded key to remove
                     if ((usedTags.find(lang) != usedTags.end() && usedTags[lang].find(tag) != usedTags[lang].end()) || keysToRemove.count(tag) > 0) {
                         fileChanged = true;
+                        removedInThisFile++;
                     }
                     else {
                         fileData.append(line);
@@ -518,11 +650,20 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
                     outCleaned << QString::fromStdString(processedLine) << "\n";
                 }
                 cleanedOutputFile.close();
-                emit logMessage("UPDATED: " + cleanedOutputPath);
+                emit logMessage(QString("INFO: UPDATED %1 (removed %2 keys)").arg(cleanedOutputPath).arg(removedInThisFile));
+                keysRemovedForLang += removedInThisFile;
+                totalKeysRemoved += removedInThisFile;
+            }
+            else {
+                emit logMessage("INFO: No changes — skipped write for " + vanillaFileName);
             }
             filesProcessed++;
+            filesProcessedForLang++;
             emit progressUpdated(20 + qMin(filesProcessed * progressPerVanillaFile, 70)); // Progress from 20% to 90%
         }
+        emit logMessage(QString("INFO: Cleanup summary for %1 — processed: %2 files, removed: %3 keys")
+            .arg(lang).arg(filesProcessedForLang).arg(keysRemovedForLang));
+        emit logMessage(QString("DEBUG: Cleanup for language '%1' took %2 ms").arg(lang).arg(langTimer.elapsed()));
     }
     emit progressUpdated(90); // Ensure it's at 90% before copying name lists
 
@@ -530,6 +671,11 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
     emit logMessage("Copying name_lists and random_names to Output folder...");
     // Copy name_lists and random_names folders for each language
     for (const auto& lang : languages) {
+        if (m_cancelRequested.load()) {
+            emit statusMessage("Cancelling…");
+            emit taskFinished(false, "Operation cancelled.");
+            return;
+        }
         QStringList subfoldersToCopy = { "name_lists", "random_names" };
         for (const auto& subfolder : subfoldersToCopy) {
             QDir sourceDir(vanillaPath + "/" + lang + "/" + subfolder);
@@ -549,58 +695,54 @@ void Worker::runCleanupProcess(int modType, const QString& inputPath, const QStr
                         emit logMessage("WARNING: Failed to copy " + sourceDir.filePath(file) + " to " + destDir.filePath(file) + " (May already exist or permissions issue).");
                     }
                 }
-                emit logMessage("Copied " + subfolder + " for " + lang + " to Output.");
+                emit logMessage("INFO:Copied " + subfolder + " for " + lang + " to Output.");
             }
         }
     }
 
-    // Copy content of "static_localisation" folder to the Output folder,
-    // ensuring files go into the correct language subdirectories.
+    // Copy static localisation files if present
     emit statusMessage("Copying static localisation files");
-    emit logMessage("Copying files from 'static_localisation' into language subfolders in Output...");
-
-    // Get the base path for static localisation
-    QDir staticLocalisationBaseDir(QCoreApplication::applicationDirPath() + "/static_localisation");
-
-    // Iterate through each language folder in the static localisation directory
-    QStringList staticLangFolders = staticLocalisationBaseDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-    for (const QString& langFolder : staticLangFolders) {
-        QString sourceLangPath = staticLocalisationBaseDir.filePath(langFolder);
-        QDir sourceDir(sourceLangPath);
-
-        // Define the destination path for this language
-        QDir destDir(outputPath + "/" + langFolder);
-        if (!destDir.exists()) {
-            destDir.mkpath(".");
-        }
-
-        // Get the list of files to copy from the source language folder
-        QStringList filesToCopy = sourceDir.entryList(QDir::Files | QDir::NoDotAndDotDot);
-        for (const QString& file : filesToCopy) {
-            QString sourceFilePath = sourceDir.filePath(file);
-            QString destFilePath = destDir.filePath(file);
-
-            // Overwrite existing files
-            if (QFile::exists(destFilePath)) {
-                QFile::remove(destFilePath);
+    emit logMessage("INFO: Copying files from 'static_localisation' into language subfolders in Output...");
+    QDir staticLocalisationBaseDir("static_localisation");
+    QStringList staticLangFolders;
+    if (staticLocalisationBaseDir.exists()) {
+        staticLangFolders = staticLocalisationBaseDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+        for (const QString& langFolder : staticLangFolders) {
+            if (m_cancelRequested.load()) {
+                emit statusMessage("Cancelling…");
+                emit taskFinished(false, "Operation cancelled.");
+                return;
             }
-
-            if (!QFile::copy(sourceFilePath, destFilePath)) {
-                emit logMessage("WARNING: Failed to copy " + sourceFilePath + " to " + destFilePath + " (Permissions issue).");
-                success = false;
-            }
-            else {
-                emit logMessage("Copied " + file + " to " + destDir.path() + ".");
+            QString sourceLangPath = staticLocalisationBaseDir.filePath(langFolder);
+            QDir sourceDir(sourceLangPath);
+            if (!sourceDir.exists()) continue;
+            QDir destDir(outputPath + "/" + langFolder);
+            if (!destDir.exists()) destDir.mkpath(".");
+            QStringList filesToCopy = sourceDir.entryList(QDir::Files | QDir::NoDotAndDotDot);
+            for (const QString& file : filesToCopy) {
+                if (m_cancelRequested.load()) {
+                    emit statusMessage("Cancelling…");
+                    emit taskFinished(false, "Operation cancelled.");
+                    return;
+                }
+                QString sourceFilePath = sourceDir.filePath(file);
+                QString destFilePath = destDir.filePath(file);
+                if (!QFile::copy(sourceFilePath, destFilePath)) {
+                    emit logMessage("WARNING: Failed to copy " + sourceFilePath + " to " + destFilePath + " (Permissions issue).");
+                    success = false;
+                } else {
+                    emit logMessage("Copied " + file + " to " + destDir.path() + ".");
+                }
             }
         }
-    }
-
-    if (staticLangFolders.isEmpty()) {
-        emit logMessage("INFO: 'static_localisation' folder is empty or not found. Skipping copy.");
+    } else {
+        emit logMessage("INFO: 'static_localisation' folder is not found. Skipping copy.");
     }
 
     emit progressUpdated(100);
 
+    emit logMessage(QString("SUMMARY: Cleanup process duration: %1 ms; files: %2; keys removed: %3")
+        .arg(totalTimerCleanup.elapsed()).arg(filesProcessed).arg(totalKeysRemoved));
     if (success) {
         emit taskFinished(true, "Cleanup and update task completed successfully, cleaned vanilla files are in Output!");
     }

@@ -6,29 +6,24 @@
       <rect>
         <x>0</x>
         <y>0</y>
-        <width>490</width>
-        <height>260</height>
+        <width>500</width>
+        <height>250</height>
       </rect>
     </property>
     <property name="minimumSize">
       <size>
-        <width>490</width>
-        <height>260</height>
+        <width>500</width>
+        <height>250</height>
       </size>
     </property>
     <property name="maximumSize">
       <size>
-        <width>490</width>
-        <height>260</height>
+        <width>500</width>
+        <height>250</height>
       </size>
     </property>
     <property name="windowTitle">
-      <string>PDG Localisation Tool v2.0</string>
-    </property>
-    <property name="windowIcon">
-      <iconset>
-        <normaloff>E:/OneDrive/Desktop/PDGIco.png</normaloff>E:/OneDrive/Desktop/PDGIco.png
-      </iconset>
+      <string>PDG Localisation Tool v2.1</string>
     </property>
     <property name="iconSize">
       <size>
@@ -79,10 +74,96 @@
           </widget>
         </item>
         <item>
+          <widget class="QGroupBox" name="groupSheets">
+            <property name="title">
+              <string>Sheets</string>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_sheets">
+              <item alignment="Qt::AlignHCenter">
+                <widget class="QPushButton" name="selectSheetsButton">
+                  <property name="sizePolicy">
+                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                      <horstretch>0</horstretch>
+                      <verstretch>0</verstretch>
+                    </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                    <size>
+                      <width>100</width>
+                      <height>0</height>
+                    </size>
+                  </property>
+                  <property name="text">
+                    <string>Select Sheets…</string>
+                  </property>
+                </widget>
+              </item>
+              <item>
+                <widget class="QLabel" name="sheetsSummaryLabel">
+                  <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                      <horstretch>0</horstretch>
+                      <verstretch>0</verstretch>
+                    </sizepolicy>
+                  </property>
+                  <property name="text">
+                    <string>No sheets selected</string>
+                  </property>
+                  <property name="alignment">
+                    <set>Qt::AlignHCenter|Qt::AlignVCenter</set>
+                  </property>
+                  <property name="wordWrap">
+                    <bool>true</bool>
+                  </property>
+                </widget>
+              </item>
+            </layout>
+          </widget>
+        </item>
+        <item>
           <widget class="QFrame" name="actionBox">
             <layout class="QHBoxLayout" name="horizontalLayout_2">
-              <item>
+              <item alignment="Qt::AlignHCenter">
                 <widget class="QPushButton" name="unifiedRunButton">
+                  <property name="sizePolicy">
+                    <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                      <horstretch>0</horstretch>
+                      <verstretch>0</verstretch>
+                    </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                    <size>
+                      <width>200</width>
+                      <height>44</height>
+                    </size>
+                  </property>
+                  <property name="font">
+                    <font>
+                      <pointsize>12</pointsize>
+                      <weight>75</weight>
+                      <bold>true</bold>
+                    </font>
+                  </property>
+                  <property name="styleSheet">
+                    <string notr="true">QPushButton#unifiedRunButton{
+    padding: 10px 24px;
+    color: white;
+    background-color: rgb(24, 146, 0);
+    border: 1px solid rgba(255,255,255,60);
+    border-radius: 10px;
+}
+QPushButton#unifiedRunButton:hover{
+    background-color: rgb(29, 168, 2);
+}
+QPushButton#unifiedRunButton:pressed{
+    background-color: rgb(22, 128, 1);
+}
+QPushButton#unifiedRunButton:disabled{
+    background-color: rgb(70,70,70);
+    color: rgb(170,170,170);
+    border: 1px solid rgba(255,255,255,30);
+}</string>
+                  </property>
                   <property name="text">
                     <string>ENGAGE</string>
                   </property>
@@ -91,31 +172,8 @@
             </layout>
           </widget>
         </item>
-        <item>
-          <widget class="QGroupBox" name="progressBarGroupBox">
-            <property name="title">
-              <string>Progress</string>
-            </property>
-            <layout class="QVBoxLayout" name="verticalLayout_progressBar">
-              <property name="bottomMargin">
-                <number>0</number>
-              </property>
-              <item>
-                <widget class="QProgressBar" name="progressBar">
-                  <property name="value">
-                    <number>0</number>
-                  </property>
-                  <property name="textVisible">
-                    <bool>true</bool>
-                  </property>
-                </widget>
-              </item>
-            </layout>
-          </widget>
-        </item>
       </layout>
     </widget>
-    <widget class="QStatusBar" name="statusBar"/>
   </widget>
   <resources/>
   <connections/>

@@ -24,28 +24,31 @@ A **Qt-based desktop application** designed to automate the creation and cleanup
 ## Features
 
 - **Direct Google Sheets Integration**  
-  Fetches localisation data directly from Google Sheets via a [Google Apps Script API](https://github.com/ZoomImpulse/PDG_ExportSheetData), eliminating the need for manual JSON exports.
+  Fetches localisation data directly from Google Sheets via a [Google Apps Script API](https://github.com/ZoomImpulse/PDG_ExportSheetData), eliminating manual JSON exports.
+
+- **Sheet Selection Dialog (per category)**  
+  Built-in UI to choose which sheets to export for each category (Main, Ships, Modifiers, Events, Tech, Synced). Selections are saved and restored across runs.
 
 - **Parallel Asynchronous Processing**  
-  All API requests are launched concurrently, significantly speeding up the data fetching process.
+  Launches API requests concurrently for faster data fetching.
 
-- **Robust API Error Handling**  
-  Features an automatic retry mechanism with exponential backoff. If a network request fails, the tool will try again several times with increasing delays, making it resilient to temporary server issues.
+- **Robust API Error Handling with Retries**  
+  Automatic exponential backoff retries on network failures, with clear logs of attempts and totals.
 
 - **Advanced String Normalization**  
-  Automatically cleans and normalizes strings from the API, removing unwanted line breaks while correctly preserving intentional newline characters (`\n`).
+  Cleans and normalizes strings from the API, removing unwanted whitespace while preserving intended newlines (`\n`).
 
-- **Vanilla File Cleanup**  
-  Scans vanilla game localisation files and removes any entries that are already defined in your mod's files, preventing overrides and reducing file size.
+- **Vanilla File Cleanup (auto-run after create)**  
+  Removes any vanilla entries overridden by the mod and applies a hardcoded removal list. Skips Italian, copies `name_lists` and `random_names`, and merges `static_localisation/` if present.
 
-- **Multi-threaded & Responsive UI**  
-  All file and network operations run on a separate worker thread, ensuring the user interface remains responsive at all times.
+- **Responsive UI with Progress Overlay**  
+  All work runs on a worker thread. An in-window overlay shows overall progress plus fetching/processing indicators.
 
-- **Detailed Progress Tracking**  
-  A dynamic status bar shows the real-time status of operations (Fetching, Processing, Completed) and a progress bar tracks overall completion.
+- **Comprehensive Logging with Timing**  
+  Timestamped logs with level prefixes (INFO, WARNING, ERROR, DEBUG, SUMMARY). Per-step timings (per request and per language) and total durations using QElapsedTimer.
 
-- **Comprehensive Logging**  
-  Generates detailed, timestamped log files for easy monitoring and debugging of all operations.
+- **Config Persistence**  
+  Remembers Output/Vanilla paths and selected sheet IDs via a local `config.ini`.
 
 ---
 
@@ -55,21 +58,20 @@ The application operates in two main phases:
 
 ### 1. Localisation Creation
 
+- Requires explicit sheet selections per category via the built-in dialog.
 - Connects to a Google Apps Script web app URL.
-- Sends API requests for all defined localisation categories (Main, Ships, Tech, etc.) **in parallel**.
-- If a request fails due to a network error (e.g., "Internal Server Error"), it will **automatically retry** up to 3 times with an increasing delay.
-- Parses the JSON response from the API.
-- Cleans and normalizes each translation string to handle whitespace and newlines correctly.
-- Generates sorted, game-ready `.yml` files (e.g., `STH_main_l_english.yml`) organized into language-specific folders.
-- The output directory is cleared before each run to ensure a clean build.
+- Sends API requests for the selected sheets per category **in parallel**.
+- Automatic retries with exponential backoff on failures.
+- Parses JSON, normalizes strings, and writes sorted YML output per language.
+- Clears the Output folder at the start of each run.
 
-### 2. Localisation Cleanup & Update
+### 2. Localisation Cleanup & Update (auto-run)
 
-- First, it scans all the mod's `.yml` files in the **Output Path** to create a master list of existing localisation tags for each language.
-- It then processes all vanilla game `.yml` files from the specified **Vanilla Files Path**.
-- It removes any lines from the vanilla files that contain a tag already present in the mod's files or in a predefined removal list.
-- The cleaned vanilla files are written to the **Output Path**, organized by language.
-- Finally, it copies essential vanilla folders (`name_lists`, `random_names`) and any custom files from a local `static_localisation` folder (located in the executables path) into the output directory.
+- Automatically starts after creation succeeds.
+- Scans the generated mod YMLs in Output to collect used tags per language.
+- Processes vanilla YMLs from the Vanilla path and removes overridden tags and a hardcoded removal list.
+- Writes cleaned vanilla YMLs to Output/<lang>/ and copies `name_lists` and `random_names` folders.
+- Optionally merges any files from a local `static_localisation/<lang>/` into Output.
 
 ---
 
@@ -77,9 +79,8 @@ The application operates in two main phases:
 
 ### Prerequisites
 
-- Qt 5 or newer (Qt 6 is also compatible).
-    - Required modules: `QtWidgets`, `QtCore`, `QtNetwork`.
-- A C++17 compatible compiler (MSVC, MinGW, or GCC).
+- Qt 6 (tested). Required modules: `QtWidgets`, `QtCore`, `QtNetwork`.
+- A C++17 compatible compiler (MSVC recommended).
 
 ---
 
@@ -89,46 +90,50 @@ The application operates in two main phases:
 
 ```bash
 git clone https://github.com/ZoomImpulse/PDG_LocalisationCreator_GUI.git
-cd PDG-Localisation-Creator
+cd PDG_LocalisationCreator_GUI
 ```
 
-#### 2. Building with Qt Creator
+#### 2. Building with Visual Studio (recommended)
 
-1. Open the .pro file in Qt Creator
-2. Select a suitable kit (e.g., Desktop Qt 5.x.x MinGW 64-bit)
-3. Run qmake
-4. Build the project
+1. Open `PDG_LocalisationCreator_GUI.sln` in Visual Studio (with Qt VS Tools if installed).
+2. Choose configuration (`Debug`/`Release`) and platform (`x64`).
+3. Build the solution.
 
-#### OR Building with Visual Studio
+#### Alternative: Qt Creator
 
-1. Open the `.sln` file (or generate one using `qmake -tp vc`)
-2. Choose configuration (`Debug`/`Release`) and platform (e.g., `x64`)
-3. Build the solution
+- Open the `.vcxproj` or use your preferred CMake/qmake setup that includes Qt 6 and MSVC.
 
-#### 3. Deploying Necessary DLLs (only needed initially)
+#### 3. Deploying Necessary DLLs (Windows)
 After building, your executable (`.exe`) requires Qt's DLLs to run on other machines. Use Qt's `windeployqt` tool for this:
 
 1. **Navigate to your build output directory** in the command prompt or terminal. This is usually where your `.exe` file is located.
-2. **Run** `windeploygt`:
+2. **Run** `windeployqt`:
    
    ```bash
    # Example (adjust path to your Qt installation)
-   C:\Qt\5.15.2\msvc2019_64\bin\windeployqt.exe PDG_LocalisationCreator_GUI.exe
+   C:\Qt\6.x.x\msvc2019_64\bin\windeployqt.exe PDG_LocalisationCreator_GUI.exe
    ```
    This command will copy all necessary Qt DLLs and other dependencies (like plugins) into your application's directory, making it self-contained for distribution.
    
 ### Usage
 
-1. **Run the application.**
-2. **Set Paths:**
-   - **Output Path:** Choose where the generated YML files and cleaned vanilla files will be saved.
-   - **Vanilla Files Path:** Specify the root directory of the vanilla game's localisation files (e.g., `C:/Program Files (x86)/Steam/steamapps/common/Stellaris/localisation`).
-3. **Run:** Click the "ENGAGE" button.
-4. **Monitor Progress:** The status label provides a detailed breakdown of the current operations, and the progress bar tracks the overall task. Detailed logs are written to the `logs` directory.
+1. Run the application.
+2. Set Paths:
+   - Output Path: destination for generated mod YMLs and cleaned vanilla files.
+   - Vanilla Files Path: your Stellaris `localisation/` root.
+3. Click "Select Sheets" and choose desired sheets per category. Press OK.
+4. Click "ENGAGE" to start. Creation runs first; on success, Cleanup runs automatically.
+5. Monitor the in-window progress overlay (Fetching/Processing indicators + overall progress).
+6. Check `Output/` for results and `logs/` for detailed logs.
 
 ## Logging
 
-The application generates timestamped log files in a `logs directory` (e.g., `logs/log_2023-10-27_14-30-00.txt`). These logs provide detailed information about the processing steps, warnings, and errors. Old log files (from previous days) are automatically cleaned up on startup.
+- Logs are written to `logs/log_YYYY-MM-DD_hh-mm-ss.txt` per run.
+- Messages include level prefixes: `INFO`, `WARNING`, `ERROR`, `DEBUG`, `SUMMARY`.
+- Timing details:
+  - Create: per API-request durations and a total duration summary.
+  - Cleanup: per-language durations, per-file update counts, and total summary (files and keys removed).
+- Old logs from previous days are automatically deleted on startup.
 
 ## Credits
 This project is an evolution of the work originally done by Possseidon and Oninoni in the [PDG_Utilities](https://github.com/oninoni/PDG_Utilities) repository. 
