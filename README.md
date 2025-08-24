@@ -2,7 +2,8 @@
 
 A **Qt-based desktop application** designed to automate the creation and cleanup of localisation files for Stellaris mods made by PDG. This tool streamlines the translation workflow by fetching the latest data directly from Google Sheets via an API, converting it into a game-compatible YML format, and cleaning up vanilla localisation files based on existing mod entries.
 
-<img width="502" height="282" alt="Screenshot 2025-08-24 160254" src="https://github.com/user-attachments/assets/53ce9ca3-6249-4f8b-8662-d6d987da2607" />
+<img width="502" height="282" alt="Screenshot 2025-08-24 190540" src="https://github.com/user-attachments/assets/6de13f6f-8ab6-4b8d-946a-e7fb37086489" />
+
 
 ---
 
@@ -28,7 +29,7 @@ A **Qt-based desktop application** designed to automate the creation and cleanup
 - **Sheet Selection Dialog (per category)**  
   Built-in UI to choose which sheets to export for each category (Main, Ships, Modifiers, Events, Tech, Synced). Selections are saved and restored across runs.
 
-  <img width="802" height="552" alt="Screenshot 2025-08-24 160652" src="https://github.com/user-attachments/assets/e5b867be-0e9e-4509-b063-a5f24b779329" />
+<img width="802" height="552" alt="Screenshot 2025-08-24 160652" src="https://github.com/user-attachments/assets/e5b867be-0e9e-4509-b063-a5f24b779329" />
 
 - **Parallel Asynchronous Processing**  
   Launches API requests concurrently for faster data fetching.
@@ -45,7 +46,8 @@ A **Qt-based desktop application** designed to automate the creation and cleanup
 - **Responsive UI with Progress Overlay**  
   All work runs on a worker thread. An in-window overlay shows overall progress plus fetching/processing indicators.
 
-  <img width="502" height="282" alt="Screenshot 2025-08-24 160318" src="https://github.com/user-attachments/assets/8d02fe8c-3c36-407b-b36b-0618d0a2317b" />
+<img width="502" height="282" alt="Screenshot 2025-08-24 190632" src="https://github.com/user-attachments/assets/2174bb80-95cc-49d4-90f1-be37bf002fc3" />
+
 
 - **Comprehensive Logging with Timing**  
   Timestamped logs with level prefixes (INFO, WARNING, ERROR, DEBUG, SUMMARY). Per-step timings (per request and per language) and total durations using QElapsedTimer.
